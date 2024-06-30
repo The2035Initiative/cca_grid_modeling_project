@@ -6,8 +6,8 @@ This quantitative analysis is looking at a collection of EJ spatial datasets of 
 
 
 ### Data
-- [SB535 Disadvantaged Communities](https://oehha.ca.gov/calenviroscreen/sb535)
 - [CalEnviroScreen](https://oehha.ca.gov/calenviroscreen/maps-data)
+- [SB535 Disadvantaged Communities](https://oehha.ca.gov/calenviroscreen/sb535)
 - [San Diego Climate Equity Index](https://www.arcgis.com/home/item.html?id=859711eac76f47a7996b39a424c5c222)
 - [EJScreen Tool](https://www.epa.gov/ejscreen/download-ejscreen-data)
 - [White House Map](https://screeningtool.geoplatform.gov/en/downloads#3/33.47/-97.5)
