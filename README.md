@@ -22,6 +22,7 @@ This quantitative analysis is looking at a collection of EJ spatial datasets of 
 The data provided by [Climate & Health Vulnerability Indicators for CA (Climate Vulnerability Metric)](https://www.cdph.ca.gov/Programs/OHE/Pages/CC-Health-Vulnerability-Indicators.aspx#) includes the `Environmental Exposures Domain`, the `Population Sensitivty Domain`, and the `Adaptive Capacity Domain`.
 
 ### File Overview 
+```
 ├── identifying_ctracts_oversampling.ipynb
 │   
 ├── .gitignore
@@ -30,3 +31,5 @@ The data provided by [Climate & Health Vulnerability Indicators for CA (Climate 
 |
 ├── environment.yml (future works, pending)
 ├── requirements.txt (future works, pending)
+
+```
