@@ -2,7 +2,7 @@
 # California Climate Action: Large Equitable CA Survey for Advanced Electrification Consumer-Facing Policies
 
 ### Overview
-This quantitative analysis is looking at a collection of EJ spatial datasets of CA at the census tract level to identify disadvantaged communities (DAC). In this repository, we will overlay the data sets and visualize (relative to CalEnviroScreen) where the data sets do not overlap. The large equitable CA electrification survey aims to provide robust representation of historically underrepresented communities by oversampling these overlapping regions. This analysis will aid in the decision making on which census tracts or zip codes need to be included for oversampling.
+This quantitative analysis is looking at a collection of EJ spatial datasets of CA at the census tract level to identify disadvantaged communities (DAC). In this repository, we will overlay the data sets and visualize (relative to CalEnviroScreen) where the data sets do not overlap. The large equitable CA electrification survey aims to provide robust representation of historically underrepresented communities by oversampling DAC tracts. This analysis will aid in the decision making on which census tracts or zip codes need to be included for oversampling.
 
 
 ### Data
