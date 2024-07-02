@@ -24,6 +24,7 @@ The data provided by [Climate & Health Vulnerability Indicators for CA (Climate 
 ### File Overview 
 ```
 ├── identifying_ctracts_oversampling.ipynb
+├── simple_wkflw.ipynb
 │   
 ├── .gitignore
 ├── README.md
@@ -33,3 +34,15 @@ The data provided by [Climate & Health Vulnerability Indicators for CA (Climate 
 ├── requirements.txt (future works, pending)
 
 ```
+
+#### Notebook Descriptions
+
+##### `identifying_ctracts_oversampling.ipynb`
+Currently filled with data exploration and the overarching game plan for this project.
+You will see that there are some schema inconsistencies that need to be addressed within the Climate Vulnerability Metric data in order to properly map the observations.
+A db schema is currently in the works to create a temporary table to relate the observations to their appropriate geographical locations.
+
+##### `simple_wkflw.ipynb`
+To provide an update on this project to our team, I am subsetting the data that plotted properly in `identifying_ctracts_oversampling.ipynb` and overlaying them to see their overlap relative to the CalEnviroScreen data. An output of 2 csv files containing census tracts that overlapped, and census tracts that did not overlap will be produced, alongside some engaging visualizations. The objective is to create a framework that will be later leveraged once the Climate Vulnerability Metric and EJScreen data are wrangled.
+
+
