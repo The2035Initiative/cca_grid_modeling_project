@@ -23,10 +23,16 @@ The data provided by [Climate & Health Vulnerability Indicators for CA (Climate 
 
 ### File Overview 
 ```
-├── identifying_ctracts_oversampling.ipynb
-├── clim_vuln_metrics_indicators_wrangle.ipynb
-├── relating_data.ipynb
-├── simple_wkflw.ipynb
+├── Script/
+|   ├── identifying_ctracts_oversampling.ipynb
+|   ├── clim_vuln_metrics_indicators_wrangle.ipynb
+|   ├── relating_data.ipynb
+|   ├── simple_wkflw.ipynb
+|
+├── Deliverables/
+|   ├── no_overlap_map (future works, pending)
+|   ├── no_overlap_tracts/
+|       └──"associated_data_no_overlap.csv"
 │   
 ├── .gitignore
 ├── README.md
