@@ -90,13 +90,10 @@ tm_shape(calenviro) +
   # areas with overlap are made to be white,
   # as to "white out" areas not of interest  
   # the only visible regions are where the data do no overlap 
-  tm_bubbles(col = 'white',
-             size = .1,
+  tm_bubbles(size = .1,
              alpha = 0.5,
              palette = "plasma",
-             border.col = 'white',
-             style = 'fixed',
-             breaks = bins
+             border.col = 'white'
              ) 
 ```
 

@@ -49,24 +49,40 @@ calenviro <- calenviro %>%
 
 # check! nice!
 range(calenviro$hous_burd)
+
+calenviro <- st_transform(calenviro,
+                          4326) %>% 
+  st_make_valid()
 ```
 
-# Read SD CEI Data
-```{r read_n_wrangle_sdcei}
-sd_cei <- st_read(here("data","sd_climate_equity_index","City_of_San_Diego_CEI_2021_Revision.shp")) %>% 
+
+# Read CDC SVI Data
+This raw data only contains CA observations, so no need to filter. However, it lacks geo-info, so we're going to relate the df using `calenviro$tract` and `cdc_svi$fips`
+
+```{r read_n_wrangle_cdc_svi}
+cdc_svi <- read_csv(here("data", "CDC_Index", "California_SVI.csv"),
+                    show_col_types = FALSE) %>% 
   janitor::clean_names() %>% 
+  # match dtype w/ calenviro
+  mutate(fips = as.double(fips))
+
+
+# now cdc_svi contains geo-info and all the calenviro info
+cdc_svi_geo <- left_join(cdc_svi, calenviro, by = c("fips" = "tract"))
+                    
+head(cdc_svi_geo , 3)     
+
+# let's make it a spatial object for mapping now
+cdc_svi_geo <- st_as_sf(cdc_svi_geo) %>% 
+  st_transform(crs = 4326) %>% 
   st_make_valid()
 
-colnames(sd_cei)
+# fix geometries
+cdc_svi_geo <- cdc_svi_geo[!st_is_empty(cdc_svi_geo), ]
 
-# housing burden is a good parameter to visualize
-# let's get an idea of the bin distribution for plotting
-range(calenviro$cei_score)
-
-unique(sd_cei$cei_score)
 ```
 
-```{r sdcei_map}
+```{r cdc_svi_map}
 # we'll break housing burden into quantiles
 bins <- seq(0, 100, by = 25)
 
@@ -82,16 +98,15 @@ tm_shape(calenviro) +
               style = 'fixed',
               breaks = bins) +
   
-  tm_shape(sd_cei) +
+  tm_shape(cdc_svi_geo) +
   
   # areas with overlap are made to be white,
   # as to "white out" areas not of interest  
   # the only visible regions are where the data do no overlap 
-  tm_bubbles(size = .5,
+  tm_bubbles(size = .1,
              alpha = 0.5,
              palette = "plasma",
              border.col = 'white'
              ) 
-  
 ```
 
