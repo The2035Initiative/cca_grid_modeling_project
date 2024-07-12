@@ -1,0 +1,266 @@
+---
+title: "Visualizing Non-Overlapping Disadvantaged Census Tracts: Bolstering CalEnviroScreen Considerations"
+author: "Sofia Ingersoll"
+format:
+  html:
+    code-fold: true
+    code-summary: "View the code"
+embedded-sources: true
+output:
+  html_document:
+    print_df: paged
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r set-up, message = FALSE}
+library(sf)
+#library(sp)
+library(tmap)
+library(here)
+library(stars)
+library(terra)
+library(raster)
+library(maptiles)
+library(tidyverse)
+library(leaflet)
+#library(sfheaders)
+#library(ggspatial)
+library(tmaptools)
+library(osmextract) 
+library(RColorBrewer)
+```
+
+
+# Read & Plot CalEnviroScreen Data
+```{r read_n_wrangle_calenviro}
+calenviro <- st_read(here("data","CalEnviroScreen","CES4 Final Shapefile.shp")) %>% 
+  janitor::clean_names() %>% 
+  st_make_valid()
+
+# housing burden is a good parameter to visualize
+# let's get an idea of the bin distribution for plotting
+range(calenviro$hous_burd)
+
+# remove the -999.0, that's an NA
+calenviro <- calenviro %>% 
+  filter(hous_burd != -999.0)
+
+# check! nice!
+range(calenviro$hous_burd)
+```
+```{r}
+colnames(calenviro)
+```
+
+```{r calenviro_only}
+# we'll break housing burden into quantiles
+bins <- seq(0, 100, by = 25)
+
+tmap_mode('view')
+
+tm_shape(calenviro) +
+  
+  tm_basemap(leaflet::providers$OpenStreetMap) +
+  
+  tm_polygons(col = 'hous_burd',
+              palette = 'plasma',
+              style = 'fixed',
+              breaks = bins) 
+```
+
+
+### Overlaying Data to Identify Non-Overlapping CA Census Tracts
+
+
+```{r read_n_wrangle_sb535}
+# sb535 xlsx sheet
+# inspecting the tribal data provided on tab 3, there is no geolocation information
+# so unfortunately these can't be plotted 
+
+# Define the path to your Excel file
+sb535_path <- here("data", "SB535_disadv_communities", "SB535DACresultsdatadictionary_F_2022.xlsx")
+
+# Get the names of all sheets in the Excel file
+sheet_names <- readxl::excel_sheets(sb535_path)
+
+# Print sheet names to verify and select the correct one
+print(sheet_names)
+
+# Read the fourth sheet directly by its name or index
+sb535_tract_data <- readxl::read_xlsx(sb535_path, sheet = sheet_names[4]) %>% 
+  janitor::clean_names() %>%
+  as.data.frame()
+
+sb535_tract_data
+```
+
+
+```{r parsing_sb535, eval = FALSE}
+# let's isolate data of interest
+# noting that the last sheet being added only contains data for tracts and not tribal areas
+sb535_path <- here("data","SB535_disadv_communities","SB535DACresultsdatadictionary_F_2022.xlsx")
+
+sb535_sheetnames <- readxl::excel_sheets(sb535_path)
+
+# we're making a list of df here of our sheets
+pull_sheets <- function(raw_data_path, sheet_names) {
+  sheet_list <- list()
+  for (sheet in sheet_names[2:4]) {
+    sheet_data <- readxl::read_xlsx(raw_data_path, sheet = sheet) %>%
+      janitor::clean_names()
+    sheet_list[[sheet]] <- sheet_data
+  }
+  return(sheet_list)
+}
+
+# pull sheets 2 to 4 into a list of data frames
+sb535_list <- pull_sheets(sb535_path, sb535_sheetnames)
+
+# then combining the list into a df
+sb535 <- bind_rows(sb535_list) %>% 
+  as.data.frame()
+
+sb535
+```
+
+```{r}
+colnames(sb535)
+```
+
+```{r}
+# housing burden is a good parameter to visualize
+# let's get an idea of the bin distribution for plotting
+range(sb535_tract_data$housing_burden)
+
+# remove the -999.0, that's an NA
+sb535_tract_data <- sb535_tract_data %>% 
+  
+  mutate(housing_burden = as.numeric(housing_burden)) %>% 
+  
+  filter(!is.na(housing_burden))
+
+# check! nice!
+range(sb535_tract_data$housing_burden)
+```
+
+```{r sb535_sf}
+# make a geo object
+sb535_geo <- sb535_tract_data %>% 
+  
+  filter(!is.na(longitude) & !is.na(latitude)) %>% 
+  
+  st_as_sf(coords = c('longitude', "latitude"),
+                      crs = 4326) %>% 
+  st_make_valid()
+```
+
+```{r}
+# we'll break housing burden into quantiles
+bins <- seq(0, 100, by = 25)
+
+tmap_mode('view')
+
+tm_shape(sb535_geo) +
+  
+  tm_basemap(leaflet::providers$OpenStreetMap) +
+  
+  tm_symbols(col = 'housing_burden',
+             palette = 'plasma',
+             style = 'fixed',
+             breaks = bins,
+             size = 5,
+             alpha = 0.5) 
+```
+
+**notes**
+* Very weird, but the two are only plotting correctly when they have different crs. Fundamentally they should not plot together when they have different CRS, but they are?
+
+```{r}
+# we'll break housing burden into quantiles
+bins <- seq(0, 100, by = 25)
+
+# i want a map will all the data layered for for selection against calenviro
+tmap_mode(mode = "view")
+
+tm_shape(calenviro) +
+  
+  tm_basemap(leaflet::providers$OpenStreetMap) +
+  
+  tm_polygons(col = 'hous_burd',
+              palette = 'plasma',
+              style = 'fixed',
+              breaks = bins) +
+  
+  tm_shape(sb535_geo) +
+  
+  # areas with overlap are made to be white,
+  # as to "white out" areas not of interest  
+  # the only visible regions are where the data do no overlap 
+  tm_bubbles(col = 'transparent',
+             size = .5,
+             alpha = 0.5,
+             palette = "plasma",
+             border.col = 'white',
+             style = 'fixed',
+             breaks = bins
+             ) +
+  
+  tm_layout(
+    
+  )
+```
+
+
+
+So calenviro has an EPSG specific to california, where as sb535 has a EPSG for North America/US. Let's try and do a disjoin and isolate non-overlapping regions
+```{r sb535_nonoverlapping_data}
+calenviro <- st_transform(calenviro, 4326) %>% 
+  st_make_valid()
+
+# Perform spatial join to identify non-overlapping areas
+sb535_non_overlapping <- st_join(sb535_geo, calenviro, join = st_disjoint)
+```
+
+```{r  sb535_nonoverlapping_map}
+bins <- seq(0, 100, by = 25)
+
+# i want a map will all the data layered for for selection against calenviro
+tmap_mode(mode = "view")
+
+tm_shape(calenviro) +
+  
+  tm_basemap(leaflet::providers$OpenStreetMap) +
+  
+  tm_polygons(col = 'hous_burd',
+              palette = 'plasma',
+              style = 'fixed',
+              breaks = bins) +
+  
+  tm_shape(sb535_non_overlapping) +
+  
+  # areas with overlap are made to be white,
+  # as to "white out" areas not of interest  
+  # the only visible regions are where the data do no overlap 
+  tm_bubbles(col = 'white',
+             size = .5,
+             alpha = 0.5,
+             palette = "plasma",
+             border.col = 'white') 
+```
+
+
+```{r}
+palette_explorer()
+```
+
+
+
+
+
+
+
+
+
+

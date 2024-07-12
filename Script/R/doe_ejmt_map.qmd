@@ -1,0 +1,103 @@
+---
+title: "Visualizing Non-Overlapping Disadvantaged Census Tracts: Bolstering CalEnviroScreen Considerations"
+author: "Sofia Ingersoll"
+format:
+  html:
+    code-fold: true
+    code-summary: "View the code"
+embedded-sources: true
+output:
+  html_document:
+    print_df: paged
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+```{r set-up, message = FALSE}
+library(sf)
+#library(sp)
+library(tmap)
+library(here)
+library(stars)
+library(terra)
+library(raster)
+library(maptiles)
+library(tidyverse)
+library(leaflet)
+#library(sfheaders)
+#library(ggspatial)
+library(tmaptools)
+library(osmextract) 
+library(RColorBrewer)
+```
+
+
+# Read CalEnviroScreen Data
+```{r read_n_wrangle_calenviro}
+calenviro <- st_read(here("data","CalEnviroScreen","CES4 Final Shapefile.shp")) %>% 
+  janitor::clean_names() %>% 
+  st_make_valid()
+
+# housing burden is a good parameter to visualize
+# let's get an idea of the bin distribution for plotting
+range(calenviro$hous_burd)
+
+# remove the -999.0, that's an NA
+calenviro <- calenviro %>% 
+  filter(hous_burd != -999.0)
+
+# check! nice!
+range(calenviro$hous_burd)
+```
+
+
+
+```{r read_n_wranlge_wh}
+doe_ejmt <- st_read(here("data", "DOE_EJ_mapping_tool","DAC Shapefiles (v2022c).shp"),
+                       quiet = TRUE) %>% 
+  janitor::clean_names()
+
+doe_ejmt  <- doe_ejmt  %>% 
+  filter(stateabb == "California")
+
+doe_ejmt <- st_transform(doe_ejmt, 
+                            crs = st_crs(calenviro)) %>% 
+  st_make_valid()
+
+# remove empty geometries
+doe_ejmt  <- doe_ejmt[!st_is_empty(doe_ejmt), ]
+```
+
+```{r wh_map}
+# we'll break housing burden into quantiles
+bins <- seq(0, 100, by = 25)
+
+# i want a map will all the data layered for for selection against calenviro
+tmap_mode(mode = "view")
+
+tm_shape(calenviro) +
+  
+  tm_basemap(leaflet::providers$OpenStreetMap) +
+  
+  tm_polygons(col = 'hous_burd',
+              palette = 'plasma',
+              style = 'fixed',
+              breaks = bins) +
+  
+  tm_shape(doe_ejmt) +
+  
+  # areas with overlap are made to be white,
+  # as to "white out" areas not of interest  
+  # the only visible regions are where the data do no overlap 
+  tm_bubbles(col = 'white',
+             size = .1,
+             alpha = 0.5,
+             palette = "plasma",
+             border.col = 'white',
+             style = 'fixed',
+             breaks = bins
+             ) 
+```
+
+
