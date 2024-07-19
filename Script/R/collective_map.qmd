@@ -15,18 +15,14 @@ output:
 ---
 
 ```{r set-up, message = FALSE}
+#knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+
 library(sf)
-#library(sp)
 library(tmap)
 library(here)
-library(stars)
 library(terra)
-library(raster)
-library(maptiles)
 library(tidyverse)
 library(leaflet)
-#library(sfheaders)
-#library(ggspatial)
 library(tmaptools)
 library(osmextract) 
 library(RColorBrewer)
@@ -35,20 +31,21 @@ library(RColorBrewer)
 
 # Read CalEnviroScreen Data
 ```{r read_n_wrangle_calenviro}
-calenviro <- st_read(here("data","CalEnviroScreen","CES4 Final Shapefile.shp")) %>% 
+calenviro <- st_read(here("data","CalEnviroScreen","CES4 Final Shapefile.shp"),
+                  quiet = TRUE) %>% 
   janitor::clean_names() %>% 
   st_make_valid()
 
 # housing burden is a good parameter to visualize
 # let's get an idea of the bin distribution for plotting
-range(calenviro$hous_burd)
+#range(calenviro$hous_burd)
 
 # remove the -999.0, that's an NA
 calenviro <- calenviro %>% 
   filter(hous_burd != -999.0)
 
 # check! nice!
-range(calenviro$hous_burd)
+#range(calenviro$hous_burd)
 
 calenviro <- st_transform(calenviro,
                           4326) %>% 
@@ -101,7 +98,8 @@ sb535_geo <- sb535_tract_data %>%
 
 # SD CEI Data
 ```{r read_n_wrangle_sd_cei}
-sd_cei <- st_read(here("data","sd_climate_equity_index","City_of_San_Diego_CEI_2021_Revision.shp")) %>% 
+sd_cei <- st_read(here("data","sd_climate_equity_index","City_of_San_Diego_CEI_2021_Revision.shp"),
+                  quiet = TRUE) %>% 
   janitor::clean_names() %>% 
   st_make_valid()
 
@@ -127,7 +125,8 @@ white_house <- st_transform(white_house,
 # DOE EJMT Data
 ```{r troubleshooting_workflow}
 # Step 1: Read shapefile
-doe_ejmt <- st_read(here("data", "DOE_EJ_mapping_tool", "DAC Shapefiles (v2022c).shp"), quiet = TRUE) %>% 
+doe_ejmt <- st_read(here("data", "DOE_EJ_mapping_tool", "DAC Shapefiles (v2022c).shp"), 
+                    quiet = TRUE) %>% 
             janitor::clean_names()
 
 # str(doe_ejmt)
@@ -206,7 +205,7 @@ bins <- seq(0, 100, by = 25)
 # i want a map will all the data layered for for selection against calenviro
 tmap_mode(mode = "view")
 
-tm_shape(calenviro) +
+overlayed_map <- tm_shape(calenviro) +
   
   tm_basemap(leaflet::providers$OpenStreetMap) +
   
@@ -290,7 +289,18 @@ tm_shape(calenviro) +
              alpha = 0.5,
              palette = "plasma",
              border.col = 'white'
-            ) 
+            ) +
+  
+  tm_scale_bar() +
+  
+   tm_layout(title = "Visualizing the Overlap of CalEnviroScreen and a set of EJ Data: \\n Highlighting the Housing Burden & Identifying Non-Overlapping Census Tracts",
+            title.size = 1.5,
+            main.title.position = c("center", "top"),
+            legend.title.size = 0.8,
+            legend.text.size = 0.7)
+
+
+tmap_save(overlayed_map, here("Deliverables","interactive_maps","overlayed_maps","overlayed_map_collective.html"))
 ```
 
 

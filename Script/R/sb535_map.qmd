@@ -15,18 +15,14 @@ output:
 ---
 
 ```{r set-up, message = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, echo = TRUE)
+
 library(sf)
-#library(sp)
 library(tmap)
 library(here)
-library(stars)
 library(terra)
-library(raster)
-library(maptiles)
 library(tidyverse)
 library(leaflet)
-#library(sfheaders)
-#library(ggspatial)
 library(tmaptools)
 library(osmextract) 
 library(RColorBrewer)
@@ -35,26 +31,28 @@ library(RColorBrewer)
 
 # Read & Plot CalEnviroScreen Data
 ```{r read_n_wrangle_calenviro}
-calenviro <- st_read(here("data","CalEnviroScreen","CES4 Final Shapefile.shp")) %>% 
-  janitor::clean_names() %>% 
-  st_make_valid()
+calenviro <- st_read(here("data","CalEnviroScreen","CES4 Final Shapefile.shp"),
+                     quiet = TRUE) %>% 
+  janitor::clean_names() 
 
 # housing burden is a good parameter to visualize
 # let's get an idea of the bin distribution for plotting
-range(calenviro$hous_burd)
+#range(calenviro$hous_burd)
 
 # remove the -999.0, that's an NA
 calenviro <- calenviro %>% 
-  filter(hous_burd != -999.0)
+  filter(hous_burd != -999.0) %>% 
+  st_transform(4326) %>% 
+  st_make_valid()
 
 # check! nice!
-range(calenviro$hous_burd)
+#range(calenviro$hous_burd)
 ```
-```{r}
-colnames(calenviro)
+```{r eval = FALSE}
+#colnames(calenviro)
 ```
 
-```{r calenviro_only}
+```{r calenviro_only, eval = FALSE}
 # we'll break housing burden into quantiles
 bins <- seq(0, 100, by = 25)
 
@@ -86,14 +84,15 @@ sb535_path <- here("data", "SB535_disadv_communities", "SB535DACresultsdatadicti
 sheet_names <- readxl::excel_sheets(sb535_path)
 
 # Print sheet names to verify and select the correct one
-print(sheet_names)
+#print(sheet_names)
 
 # Read the fourth sheet directly by its name or index
 sb535_tract_data <- readxl::read_xlsx(sb535_path, sheet = sheet_names[4]) %>% 
   janitor::clean_names() %>%
-  as.data.frame()
+  as.data.frame() %>% 
+  rename(tract = census_tract)
 
-sb535_tract_data
+#sb535_tract_data
 ```
 
 
@@ -122,17 +121,17 @@ sb535_list <- pull_sheets(sb535_path, sb535_sheetnames)
 sb535 <- bind_rows(sb535_list) %>% 
   as.data.frame()
 
-sb535
+# sb535
 ```
 
-```{r}
-colnames(sb535)
+```{r eval = FALSE}
+#colnames(sb535)
 ```
 
-```{r}
+```{r eval = FALSE}
 # housing burden is a good parameter to visualize
 # let's get an idea of the bin distribution for plotting
-range(sb535_tract_data$housing_burden)
+#range(sb535_tract_data$housing_burden)
 
 # remove the -999.0, that's an NA
 sb535_tract_data <- sb535_tract_data %>% 
@@ -142,7 +141,7 @@ sb535_tract_data <- sb535_tract_data %>%
   filter(!is.na(housing_burden))
 
 # check! nice!
-range(sb535_tract_data$housing_burden)
+#range(sb535_tract_data$housing_burden)
 ```
 
 ```{r sb535_sf}
@@ -156,7 +155,7 @@ sb535_geo <- sb535_tract_data %>%
   st_make_valid()
 ```
 
-```{r}
+```{r  eval = FALSE}
 # we'll break housing burden into quantiles
 bins <- seq(0, 100, by = 25)
 
@@ -177,89 +176,80 @@ tm_shape(sb535_geo) +
 **notes**
 * Very weird, but the two are only plotting correctly when they have different crs. Fundamentally they should not plot together when they have different CRS, but they are?
 
-```{r}
+```{r sb535_map}
 # we'll break housing burden into quantiles
 bins <- seq(0, 100, by = 25)
 
 # i want a map will all the data layered for for selection against calenviro
 tmap_mode(mode = "view")
 
-tm_shape(calenviro) +
+overlayed_map <- tm_shape(calenviro) +
   
   tm_basemap(leaflet::providers$OpenStreetMap) +
   
   tm_polygons(col = 'hous_burd',
               palette = 'plasma',
               style = 'fixed',
-              breaks = bins) +
+              breaks = bins,
+              title = "Housing Burden") +
   
   tm_shape(sb535_geo) +
   
   # areas with overlap are made to be white,
   # as to "white out" areas not of interest  
   # the only visible regions are where the data do no overlap 
-  tm_bubbles(col = 'transparent',
-             size = .5,
+  tm_bubbles(size = .5,
              alpha = 0.5,
-             palette = "plasma",
              border.col = 'white',
              style = 'fixed',
              breaks = bins
              ) +
   
-  tm_layout(
-    
-  )
+  tm_scale_bar() +
+  
+  tm_layout(title = "Visualizing the Overlap of CalEnviroScreen and SB 535: \\n Highlighting the Housing Burden & Identifying Non-Overlapping Census Tracts",
+            title.size = 1.5,
+            main.title.position = c("center", "top"),
+            legend.title.size = 0.8,
+            legend.text.size = 0.7) +
+  
+  tmap_options(check.and.fix = TRUE) 
+
+
+tmap_save(overlayed_map, here("Deliverables","interactive_maps","overlayed_maps","overlayed_map_sb535.html"))
 ```
 
 
+# Isolate Non-overlapping Tracts
 
-So calenviro has an EPSG specific to california, where as sb535 has a EPSG for North America/US. Let's try and do a disjoin and isolate non-overlapping regions
-```{r sb535_nonoverlapping_data}
-calenviro <- st_transform(calenviro, 4326) %>% 
-  st_make_valid()
+Quality Check:
 
-# Perform spatial join to identify non-overlapping areas
-sb535_non_overlapping <- st_join(sb535_geo, calenviro, join = st_disjoint)
-```
+So the sb535 data has 2310 observations that we can map. 
+I believe I could bolster this using an additional data set specifically for CA census tract geometries.
 
-```{r  sb535_nonoverlapping_map}
-bins <- seq(0, 100, by = 25)
-
-# i want a map will all the data layered for for selection against calenviro
-tmap_mode(mode = "view")
-
-tm_shape(calenviro) +
-  
-  tm_basemap(leaflet::providers$OpenStreetMap) +
-  
-  tm_polygons(col = 'hous_burd',
-              palette = 'plasma',
-              style = 'fixed',
-              breaks = bins) +
-  
-  tm_shape(sb535_non_overlapping) +
-  
-  # areas with overlap are made to be white,
-  # as to "white out" areas not of interest  
-  # the only visible regions are where the data do no overlap 
-  tm_bubbles(size = .5,
-             alpha = 0.5,
-             palette = "plasma",
-             border.col = 'white') 
-```
-
-
+When disjoining the data, we expect observations to decrease because our original map had a lot of overlap in the central valley.
+A decrease of 4 observations were removed which is a little confusing comparing to the previous map.
 ```{r}
-palette_explorer()
+plot(st_geometry(sb535_geo))
+plot(st_geometry(calenviro), add = TRUE)
 ```
 
+```{r sb535_disjoint_data}
+# instead of a sgbp the output
+# let's make it a vector,
+# this only contains boolean responses for the question we asked above 
+st_crs(sb535_geo) == st_crs(calenviro)
 
+no_overlap_vector_sb535 <- st_disjoint(sb535_geo, calenviro, sparse = FALSE)[, 1]
 
+#plot(no_overlap_vector_sb535)
 
+#no_overlap_vector_sb535
 
+# subset the calenviro data based on disjoint indices
+# now we will only have geoloc data for areas that do not overlap with calenviro
+sb535_disjoint <- sb535_geo[no_overlap_vector_sb535, ]
 
-
-
-
-
+# this is better, we're seeing a drop from 8041 observations to 8034 observations
+#sb535_disjoint
+```
