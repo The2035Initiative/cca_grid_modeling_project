@@ -3,7 +3,7 @@ data/
 .DS_Store
 .RData
 .Rhistory
-
+Deliverables/interactive_maps
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
