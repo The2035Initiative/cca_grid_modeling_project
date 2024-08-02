@@ -8,7 +8,7 @@ At this stage, Thrust 2.1, we are modeling the supply side (generation and stora
 
 ![image](https://github.com/user-attachments/assets/9d3fb3f5-37a2-4453-8fc5-95785bb5d343)
 
-A hosting capacity example providing insight into the hosting capacity available for distributed energy resources at a precise feeder. NREL and IREC have published best practices to validate such hosting capacity data [(NREL, 2022; O'Neil, 2022).](https://www.nrel.gov/news/program/2022/nrel-and-irec-identify-best-practices-for-validating-hosting-capacity-analyses.html)
+A hosting capacity example providing insight into the hosting capacity available for distributed energy resources at a precise area. NREL and IREC have published best practices to validate such hosting capacity data [(NREL, 2022; O'Neil, 2022).](https://www.nrel.gov/news/program/2022/nrel-and-irec-identify-best-practices-for-validating-hosting-capacity-analyses.html)
 
 
 ### EJ Data
