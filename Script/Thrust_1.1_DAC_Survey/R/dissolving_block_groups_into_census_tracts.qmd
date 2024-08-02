@@ -1,0 +1,215 @@
+---
+title: "Expanding Block Group Observations into Census Tract Groups"
+author: "Sofia Ingersoll"
+format:
+  html:
+    code-fold: true
+    code-summary: "View the code"
+embedded-sources: true
+output:
+  html_document:
+    print_df: paged
+    toc: yes
+    toc_depth: 4
+    toc_float: yes
+---
+
+### Deliverable:
+
+Dissolve the block groups into the census level resolution and save updated related indicator data set as a csv.
+
+### Outline:
+- Load spatial data for block groups (all missing geo-info)
+- Change tract column to block_group and combine data
+- St_within(block_group_data, census_tract_data) to assign bg_polygons to census tracts
+- Dissolve bg_polygons into census tracts, saving only the census tract info, then use that in combined df
+
+NOTES: I downloaded bg tigershape and none of the geoids match the cdc svi geoids or EJScreen geoids
+
+**New Note**: Be sure to also check the tribal geocodes, perhaps that's why they're present, but not matching with the census tract or block group geoids.
+
+
+( let's start with the 7 and build to 28 )
+
+```{r set_up, message = FALSE}
+library(sf)
+library(here)
+library(readr)
+library(readxl)
+library(tidyverse)
+```
+
+### Addressing Block Groups --> Census Tracts
+
+[Block Group Data](https://catalog.data.gov/dataset/tiger-line-shapefile-2019-state-california-current-block-group-state-based)
+```{r ca_tigerline_block_group_data}
+# shape file of census tract polygons
+bg_polygons <- st_read(here("data", "tl_2019_06_bg", "tl_2019_06_bg.shp"),
+                          quiet = TRUE) %>% 
+  janitor::clean_names() %>% 
+  st_transform(crs = 4326) %>% 
+  st_make_valid()
+
+str(bg_polygons)
+
+bg_polygons <- bg_polygons %>% 
+  select(geoid, geometry) %>% 
+  rename(block_group = geoid) #%>% 
+  #mutate(block_group = as.numeric(block_group))
+
+bg_polygons
+```
+
+Note to change tract column to block_group, then compare, then adopt, then drop old info, then use that in combined)
+
+```{r read_n_wrangle_data}
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  white house  ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# subset and set crs 
+white_house <- st_read(here("data", "white_house_map","usa","usa.shp"),
+                       quiet = TRUE) %>% 
+  janitor::clean_names() %>% 
+  st_transform(crs = 4326) %>% 
+  st_make_valid() 
+
+
+white_house <- white_house %>% 
+  filter(sf == "California") %>% 
+  rename(census_tract = geoid10) %>% 
+  select(census_tract, geometry) %>% 
+  mutate(census_tract = as.numeric(census_tract)) 
+
+white_house
+```
+
+Okay really confused as to how `cdc_svi$block_group` has 9109 different observations than `bg_polygons$blockgroup` when using `setdiff()`.
+
+```{r read_n_wrangle_data}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----      More than 8057 Observations      ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Indicates the presence of block groups
+
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----    cdc svi    ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+cdc_svi <- read_csv(here("data", "CDC_Index", "California_SVI.csv"),
+                    show_col_types = FALSE) %>% 
+  janitor::clean_names() %>% 
+  select(fips) %>% 
+  rename(block_group = fips) %>% 
+  distinct(block_group) #%>% 
+ # mutate(block_group = as.numeric(block_group)) 
+
+#cdc_svi$block_group <- as.character(cdc_svi$block_group)
+#bg_polygons$blockgroup <- as.character(bg_polygons$blockgroup)
+unique(cdc_svi$block_group)[1:10]
+unique(bg_polygons$blockgroup)[1:10]
+
+
+
+cdc_svi$block_group <- trimws(as.numeric(cdc_svi$block_group))
+head(sort(cdc_svi$block_group))
+
+cdc_svi
+
+# now cdc_svi contains block group geo-info 
+cdc_svi_geo <- left_join(cdc_svi, bg_polygons, by = "block_group")
+
+cdc_svi_geo
+
+
+cdc_svi_geo <- st_as_sf(cdc_svi_geo) %>% 
+  st_transform(crs = 4326) %>% 
+  st_make_valid()
+
+cdc_svi_geo <- cdc_svi_geo %>% 
+  select(block_group, geometry)
+
+# 9109 obs
+plot(cdc_svi_geo$geometry)
+
+length(is.na(cdc_svi_geo$geometry))
+
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----   ejscreen    ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# LACKS SPATIAL DATA, THIS WORKFLOW IS NOT APPLICABLE
+ejscreen <- read_csv(here("data", "EJSCREEN_2023_Tracts_StatePct_with_AS_CNMI_GU_VI.csv"),
+                    show_col_types = FALSE) %>% 
+  janitor::clean_names() %>% 
+  filter(state_name == "California") %>% 
+  mutate(block_group = as.numeric(id)) %>% 
+  select(block_group) 
+
+
+ejscreen
+```
+
+So these checks are telling us there's something fishy going on -- and not in a good way. 
+
+None of the CA BG data is compatible with the additional observations. I've checked to see how these data compare to 100% census tract data and I am at a loss for the CDC_SVI data 
+
+```{r}
+# Here we see a discrepancy of 2249. 
+# EJSCREEN has 9129 obs and there are only 8057 census tracts
+# so this definitely contains bg
+length(setdiff(ejscreen$block_group, white_house$census_tract))
+
+# HOWEVER NONE OF THE OBSERVATIONS MATCH BLOCK GROUP DATA 
+length(setdiff(ejscreen$block_group, bg_polygons$block_group))
+
+
+# this one says all 9109 observations are not found
+length(setdiff(cdc_svi$block_group, white_house$census_tract))
+
+length(setdiff(cdc_svi$block_group, bg_polygons$block_group))
+```
+
+
+## Unionizng Polygons
+
+```{r st_within}
+
+
+bg_polygons
+
+test_svi <- st_join(cdc_svi, ct_polygons, .predicate = st_within())
+
+```
+
+
+
+
+
+
+
+
+
+```{r ca_census_tract_data}
+# to remove the block groups and retain a census level resolution
+# we're loading data that only contains the geoid's for the census tracts
+# this will be used to filter the final combined_df 
+
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  tract data   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# path to your Excel file
+tract_path <- here("data", "Tract-level-CA-HTC-Index-for-public-website-download-20190304.xlsx")
+
+# names of all sheets in the Excel file
+sheet_names <- readxl::excel_sheets(tract_path)
+
+# read the fourth sheet directly by its index
+tract_list <- readxl::read_xlsx(tract_path, sheet = sheet_names[1]) %>% 
+  janitor::clean_names() %>%
+  as.data.frame() %>% 
+  select(geoid) %>%   
+  mutate(census_tract = geoid) %>% 
+  distinct(census_tract) %>% 
+  mutate(census_tract = as.numeric(census_tract))
+
+# 8057 obs
+#tract_list
+```

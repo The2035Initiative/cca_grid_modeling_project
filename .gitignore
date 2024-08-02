@@ -3,7 +3,8 @@ data/
 .DS_Store
 .RData
 .Rhistory
-Deliverables/interactive_maps
+Deliverables/interactive_maps/
+Deliverables/no_overlap_tracts/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

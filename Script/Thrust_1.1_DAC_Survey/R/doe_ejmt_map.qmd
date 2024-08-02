@@ -1,0 +1,227 @@
+---
+title: "Visualizing Non-Overlapping Disadvantaged Census Tracts: DOE EJMT vs CalEnviroScreen"
+author: "Sofia Ingersoll"
+date: "`r Sys.Date()`"
+format:
+  html:
+    code-fold: true
+    code-summary: "View the code"
+    toc: true
+    toc-depth: 4
+    toc-float: true
+embedded-sources: true
+editor: "visual"
+---
+
+# Let's set up our environment
+
+```{r set-up, message = FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+library(sf)
+library(tmap)
+library(here)
+library(terra)
+library(tidyverse)
+library(leaflet)
+library(tmaptools)
+library(osmextract) 
+library(RColorBrewer)
+```
+
+
+# Read CalEnviroScreen Data
+```{r read_n_wrangle_calenviro, echo = FALSE}
+calenviro <- st_read(here("data","CalEnviroScreen","CES4 Final Shapefile.shp")) %>% 
+  janitor::clean_names() %>% 
+  st_make_valid()
+
+# housing burden is a good parameter to visualize
+# let's get an idea of the bin distribution for plotting
+#range(calenviro$hous_burd)
+
+# remove the -999.0, that's an NA
+calenviro <- calenviro %>% 
+  filter(hous_burd != -999.0)
+
+# check! nice!
+#range(calenviro$hous_burd)
+```
+
+# Overview of troubleshooting task below
+
+#---- CRS Troubleshooting Walk Through ----
+DOE EJMT geolation data has a length of 0 that indicates there's some issues with the reprojecting the CRS. We'll first look at the structure of the data, check the information provided, validate the geometry and try to transform it to a crs we need to plot.
+```
+$ geometry  :sfc_GEOMETRY of length 0 - attr(*, "sf_column")= chr "geometry"
+ - attr(*, "agr")= Factor w/ 3 levels "constant","aggregate",..: NA NA NA NA NA NA NA NA NA NA ...
+  ..- attr(*, "names")= chr [1:50] "geoid" "city" "county" "stateabb" ...
+>
+```
+But doe_ejmt is not happy whenever I transform the CRS and provides this message
+```
+Error: The shape doe_ejmt only contains empty units (after reprojection).
+```
+
+When trying to plot, I found that the raw shapefile is missing information after we filter, 
+````
+Warning: plotting the first 9 out of 50 attributes; use max.plot = 50 to plot allError in plot_sf(x, ...) : 
+  NA value(s) in bounding box. Trying to plot empty geometries?
+````
+
+Let's add a bbox for CA. This didn't work either and I am using EPSG:4326.
+
+
+
+```{r troubleshooting_workflow, echo = FALSE}
+# Step 1: Read shapefile
+doe_ejmt <- st_read(here("data", "DOE_EJ_mapping_tool", "DAC Shapefiles (v2022c).shp"), quiet = TRUE) %>% 
+            janitor::clean_names() 
+
+# str(doe_ejmt)
+
+# Step 2: Filter for California
+doe_ejmt <- doe_ejmt %>%
+  filter(stateabb == "CA") %>% 
+  rename(tract = geoid)
+
+# Step 3: Validate and fix geometries
+doe_ejmt <- st_make_valid(doe_ejmt)
+doe_ejmt <- doe_ejmt[!st_is_empty(doe_ejmt), ]
+
+
+# Step 4: Create a CA bounding box to assign to the data
+calenviro <- st_transform(calenviro,  4326) %>% 
+  st_make_valid()
+
+ca_bbox <- st_bbox(calenviro)
+
+doe_ejmt <- st_transform(doe_ejmt, 4326)
+
+#attr(st_geometry(doe_ejmt), "bbox") <- ca_bbox
+
+#plot(st_geometry(doe_ejmt))
+```
+
+
+# Visualize the Overlap
+
+```{r doe_ejmt_map, eval = FALSE}
+# we'll break housing burden into quantiles
+bins <- seq(0, 100, by = 25)
+
+# i want a map will all the data layered for for selection against calenviro
+tmap_mode(mode = "view")
+
+overlayed_map <- tm_shape(calenviro) +
+  
+  tm_basemap(leaflet::providers$OpenStreetMap) +
+  
+  tm_polygons(col = 'hous_burd',
+              palette = 'plasma',
+              style = 'fixed',
+              breaks = bins,
+              title = "Housing Burden") +
+  
+  tm_shape(doe_ejmt) +
+  
+  # areas with overlap are made to be white,
+  # as to "white out" areas not of interest  
+  # the only visible regions are where the data do no overlap 
+  tm_bubbles(size = .1,
+             alpha = 0.5,
+             palette = "plasma",
+             border.col = 'white'
+             ) +
+  
+  tm_scale_bar() +
+  
+  tm_layout(title = "Visualizing the Overlap of CalEnviroScreen and DOE EJMT: \\n Highlighting the Housing Burden & Identifying Non-Overlapping Census Tracts",
+            title.size = 1.5,
+            main.title.position = c("center", "top"),
+            legend.title.size = 0.8,
+            legend.text.size = 0.7)
+
+tmap_save(overlayed_map, here("Deliverables","interactive_maps","overlayed_maps","overlayed_map_doe_ejmt.html"))
+```
+
+# Isolate non-overlapping regions
+
+```{r doe_ejmt_disjoint_data}
+# instead of a sgbp the output
+# let's make it a vector,
+# this only contains boolean responses for the question we asked above 
+no_overlap_vector_doe_ejmt <- st_disjoint(calenviro, doe_ejmt, sparse = FALSE)[, 1]
+
+#plot(no_overlap_vector_doe_ejmt)
+
+#no_overlap_vector_doe_ejmt
+
+# subset the calenviro data based on disjoint indices
+# now we will only have geoloc data for areas that do not overlap with calenviro
+doe_ejmt_disjoint <- doe_ejmt[no_overlap_vector_doe_ejmt, ]
+
+# this is better, we're seeing a drop from 8041 observations to 8034 observations
+# doe_ejmt_disjoint
+```
+
+### Quick Visual Checks
+```{r calenviro_plot_check, eval = FALSE}
+ggplot() +
+  
+  geom_sf(data = calenviro) +
+  
+  theme_minimal()
+```
+
+
+```{r no_overlap_doe_ejmt_plot_check, eval = FALSE}
+no_overlap_doe_ejmt_map <- ggplot() + 
+  
+  geom_sf(data = doe_ejmt_disjoint) +
+  
+  theme_minimal() +
+  
+  labs(title = "Non-Overlapping Disadvantaged Census Tracts",
+       subtitle = "DOE EJMT vs CalEnviroScreen")
+
+  
+no_overlap_doe_ejmt_map
+```
+# Visualize Non-overlapping Regions 
+```{r doe_ejmt_disjoint_map}
+# i want a map will all the data layered for for selection against calenviro
+tmap_mode(mode = "view")
+
+no_overlap_map <- tm_shape(doe_ejmt_disjoint) +
+  
+  tm_basemap(leaflet::providers$OpenStreetMap) +
+  
+  tm_polygons(col = 'population',
+              palette = 'plasma',
+              style = 'quantile',
+              title = "Population") +
+  
+  tm_scale_bar() +
+  
+  tm_layout(title = "Visualizing DOE EJMT Non-Overlapping CA Census Tracts with Respect to CalEnviroScreen: \\n Highlighting the Population Density",
+            title.size = 5,
+            title.position = c("center", "top"),
+            legend.title.size = 0.8,
+            legend.text.size = 0.7)
+
+tmap_save(no_overlap_map, here("Deliverables","interactive_maps","no_overlap_maps","no_overlap_map_doe_ejmt.html"))
+```
+
+# Saving Data
+
+Conceptual quams:
+
+I also there to be bigger gaps in the center of the state where there was overlap observed in the first map. However, only 7 observations were removed, so it makes some sense. The initial over-layed map feels deceptive.
+
+```{r save_no_overlap_data}
+write_csv(doe_ejmt_disjoint, here("Deliverables", "no_overlap_tracts_data", "doe_ejmt_no_overlap_tracts.csv"))
+```
+
+
+
