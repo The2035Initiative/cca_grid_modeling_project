@@ -2,9 +2,14 @@
 # Designing California’s Clean and Climate Resilient Electricity Grid for Vulnerable Communities
 
 ### Overview
-Our team includes UC San Diego, UC Berkeley, UC Santa Barbara, NREL, LBNL and GridLab, as part of a California Climate Action RFP. We develop tools that enable public and private planners to identify equitable decarbonization approaches for disadvantaged communities that are resilient to climate impacts. Our focus is on how Distributed Energy Resources (DERs) and electrified loads can work together during climate extremes to ensure resilience, quantifying the benefits of demand response, and DERs in disadvantaged communities. Our objective is to produce actionable outcomes to help disadvantaged communities create resilient distribution networks against climate change impacts while designing equitable decarbonization pathways.
+Our team includes UC San Diego, UC Berkeley, UC Santa Barbara, NREL, LBNL and GridLab, as part of a California Climate Action RFP. We develop tools that enable public and private planners to identify equitable decarbonization approaches for disadvantaged communities that are resilient to climate impacts. Our focus is on how Distributed Energy Resources (DERs) and electrified loads can work together during climate extremes to ensure resilience, quantifying the benefits of demand response, and DERs in disadvantaged communities. Our objective is to produce actionable outcomes to help disadvantaged communities create resilient distribution networks against climate change impacts while designing equitable decarbonization pathways (Hidalgo-Gonzalez, 2023).
 
 At this stage, Thrust 2.1, we are modeling the supply side (generation and storage) potential and costs of rooftop solar for different building-types to inform feasible microgrid configurations in CA. We are combining spatially-explicit data from multiple studies to consider physical, technical, environmental, and social siting constraints. 
+
+![image](https://github.com/user-attachments/assets/9d3fb3f5-37a2-4453-8fc5-95785bb5d343)
+
+A hosting capacity example providing insight into the hosting capacity available for distributed energy resources at a precise area. NREL and IREC have published best practices to validate such hosting capacity data [(NREL, 2022; O'Neil, 2022).](https://www.nrel.gov/news/program/2022/nrel-and-irec-identify-best-practices-for-validating-hosting-capacity-analyses.html)
+
 
 ### EJ Data
 - [CalEnviroScreen](https://oehha.ca.gov/calenviroscreen/maps-data)
@@ -128,4 +133,5 @@ This is a primarily research driven portion of the project, focusing on applying
 16. “SB 535 Disadvantaged Communities.”Accessed 30 June 2024.
 17. OEHHA CA.Gov, May 2023, oehha.ca.gov/calenviroscreen/sb535. Accessed 30 June 2024.
 18. U.S. Census Bureau. Explore Census Data. data.census.gov/table/ACSDP1Y2022.DP04?q=DP04&t=Housing:Housing%20Units:Physical%20Characteristics:Types%20of%20Rooms:Units%20and%20Stories%20in%20Structure&g=040XX00US06,06$1400000&y=2022.Accessed 30 June 2024.
+19. “NREL and IREC Identify Best Practices for Validating Hosting Capacity Analyses.” News | NREL, www.nrel.gov/news/program/2022/nrel-and-irec-identify-best-practices-for-validating-hosting-capacity-analyses.html.
 ```
