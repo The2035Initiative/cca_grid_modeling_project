@@ -1,0 +1,56 @@
+---
+title: "Inspecting tiff for CA Substations and Transmission Lines"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(here)
+library(tmap)
+library(stars)
+library(leaflet)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+library(tidyverse)
+library(RColorBrewer)
+```
+
+Need a geotiff 
+
+```{r}
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  substation data   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# path to your Excel file
+tiff_path <- here("data", "Thrust_2.1_Building_Energy_DS","grid_feeder_data","DataBasin-map_substations_transmission_lines","completeMapDocument.tif")
+
+substations <- read_stars(tiff_path)
+
+plot(substations)
+```
+```{r}
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  substation data   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# path to your Excel file
+tif_path <- here("data", "Thrust_2.1_Building_Energy_DS","grid_feeder_data","DataBasin-map_substations_transmission_lines","map_image.tif")
+
+substation <- read_stars(tif_path)
+
+plot(substation)
+```
+

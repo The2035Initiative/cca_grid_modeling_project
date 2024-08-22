@@ -1,0 +1,66 @@
+---
+title: "SDGE Substation Footprint Data Inspection"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(here)
+library(terra)
+library(tmap)
+library(leaflet)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+library(tidyverse)
+library(RColorBrewer)
+```
+
+```{r read}
+# Path to the geodatabase
+sdge_path <- here("data", "Thrust_2.1_Building_Energy_DS", "grid_feeder_data", "SDGE", "Substations_NDA", "Substations.shp")
+
+sdge_substations <- st_read(sdge_path)
+```
+
+```{r}
+plot(sdge_substations)
+```
+```{r}
+head(sdge_substations)
+colnames(sdge_substations)
+```
+```{r}
+# Switch tmap to view mode
+tmap_mode("view")
+
+# Create a map (for saving or interactive use)
+feeder_map <- tm_shape(sdge_substations) +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_polygons(col = "skyblue",
+              fill_alpha = 0.5)
+
+feeder_map
+```
+
+
+```{r}
+# plot based on voltage 
+ggplot(sdge_substations) +
+  geom_sf(aes(fill = SUBSTATION)) +
+  guides(fill = guide_none())
+```
+

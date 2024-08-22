@@ -1,0 +1,148 @@
+---
+title: "Overlaying Google's Project Sunroof Data"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(here)
+library(tmap)
+library(leaflet)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+library(tidyverse)
+library(RColorBrewer)
+```
+
+```{r read_n_wrangle}
+path_to_sunroof <- '../../../data/Thrust_2.1_Building_Energy_DS/rooftop_solar_potential_data/project-sunroof-census_tract.csv'
+
+sunroof_data <- read_csv(path_to_sunroof,
+                         show_col_types = F) %>% 
+  janitor::clean_names()
+
+sunroof_ca <- sunroof_data %>% 
+  filter(state_name == 'California')
+
+# Create polygons from lat/lng min/max
+create_polygon <- function(lat_min, lat_max, lng_min, lng_max) {
+  st_polygon(list(matrix(c(
+    lng_min, lat_min,
+    lng_min, lat_max,
+    lng_max, lat_max,
+    lng_max, lat_min,
+    lng_min, lat_min
+  ), ncol = 2, byrow = TRUE)))
+}
+
+# Convert to sf object with polygons
+sunroof_ca_sf <- sunroof_ca %>%
+  mutate(geometry = st_sfc(mapply(create_polygon, lat_min, lat_max, lng_min, lng_max, SIMPLIFY = FALSE))) %>%
+  st_as_sf(crs = 4326) %>% 
+  # Check for invalid geometries
+  st_make_valid()
+```
+
+The `count_qualified` column reveals the level of building aggregation present within each polygon. Let's inspect.
+These appear to be highly aggregated polygons containing clusters of buildings.
+```{r}
+count_quantiles <- quantile(sunroof_ca_sf$count_qualified, na.rm = T)
+
+count_quantiles
+```
+
+`kw_total` # of kW of solar potential for all roof types in that region (assuming 250 watts per panel). 
+```{r}
+kw_quantiles <- quantile(sunroof_ca_sf$kw_total, na.rm =T)
+
+kw_quantiles
+```
+
+let's relate the `region_name` to `GEOID` to see if these match CA census tracts. There are 7991 obs in `sunroof_ca_sf` and 8057 obs in our `tract_list`
+
+**Make sure indigenous communities contained with census tracts. They should fall within a or many ct, need to look into**
+- Double check disadv. mapping
+- Match solar project data w/ polygons of ct and map
+- Ensure every ct is accounted for
+
+Follow up with Project Sunroof about getting building level info: 
+- is it based on populus or location of homes identifed for pv
+
+Send email to 
+
+Look into building level data emailed from Ranjit (occupant type, no. units, )
+- LEAD/LEED 
+
+**Need break down of commercial vs residential homes**
+
+```{r ca_census_tract_data}
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  tract data   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# path to your Excel file
+tract_path <- here("data", "Thrust_1.1_DAC_Survey","Tract-level-CA-HTC-Index-for-public-website-download-20190304.xlsx")
+
+# names of all sheets in the Excel file
+sheet_names <- readxl::excel_sheets(tract_path)
+
+# read the fourth sheet directly by its index
+tract_list <- readxl::read_xlsx(tract_path, sheet = sheet_names[1]) %>% 
+  janitor::clean_names() %>%
+  as.data.frame() %>% 
+  dplyr::select(geoid) %>%   
+  mutate(region_name = geoid) %>% 
+  distinct(region_name) %>% 
+  mutate(region_name = as.numeric(region_name))
+
+# 8057 obs
+tract_list
+
+sunroof_ca_sf <- sunroof_ca_sf %>% 
+  mutate(region_name = as.numeric(region_name))
+
+# only save observations present in both
+ct_solar_potential <- inner_join(sunroof_ca_sf, tract_list)
+
+# a single observation did not match census tract GEOID
+nrow(ct_solar_potential)
+```
+
+
+
+```{r map}
+tmap_mode('view')
+
+map <- tm_shape(sunroof_ca_sf) +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_fill(fill.alpha = 0.3) +
+  
+  tm_borders() +  # Add borders to polygons
+  
+  tm_scalebar(position = c('left', 'bottom')) +
+  
+  tm_layout(
+    # Place the legend outside the map
+    legend.outside = TRUE, 
+    legend.title.size = 1.2,
+    legend.text.size = 1
+  ) 
+
+map
+```
+
+
+

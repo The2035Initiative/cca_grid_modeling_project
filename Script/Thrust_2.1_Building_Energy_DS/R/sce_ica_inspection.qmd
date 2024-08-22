@@ -1,0 +1,128 @@
+---
+title: "SDGE Substation Footprint Data Inspection"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(here)
+library(terra)
+library(tmap)
+library(leaflet)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+library(tidyverse)
+library(RColorBrewer)
+
+library(geojsonsf)
+
+library(httr)
+library(jsonlite)
+library(sf)
+```
+
+```{r read}
+# Path to the geodatabase
+sce_path <- here("data", "Thrust_2.1_Building_Energy_DS", "grid_feeder_data", "SCE", "Substations.csv")
+
+sce_substations <- read_csv(sce_path)
+```
+
+```{r}
+head(sce_substations)
+
+sce_substations_sf <- sce_substations %>% 
+  st_as_sf(coords = c('X', 'Y')) %>% 
+  st_set_crs(4326) %>% 
+  st_make_valid()
+
+sce_substations_sf
+```
+
+```{r}
+plot(sce_substations_sf)
+```
+```{r}
+# Path to the geodatabase
+sce_path <- here("data", "Thrust_2.1_Building_Energy_DS", "grid_feeder_data", "SCE", "Transmission_Circuits.geojson")
+
+sce_transmission_circuits <- st_read(sce_path)
+
+
+sce_transmission_circuits <- geojson_sf(sce_path)
+
+sce_transmission_circuits
+```
+```{r}
+plot(sce_transmission_circuits)
+```
+```{r}
+sce_transmission_circuits <- sce_transmission_circuits %>% 
+  st_set_crs(4326) %>% 
+  st_make_valid()
+
+#sce_substations_sf <- sce_substations_sf%>% 
+ # st_set_crs(4326) %>% 
+  #st_make_valid()
+
+st_crs(sce_substations_sf)
+st_crs(sce_transmission_circuits)
+```
+```{r}
+sce_transmission_circuits
+```
+
+```{r}
+# Switch tmap to static mode
+tmap_mode("view")
+
+# Create a static map (for saving or non-interactive use)
+feeder_map1 <- tm_shape(sce_transmission_circuits) +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_lines(col = "darkblue", lwd = 3, fill_alpha = 0.7) + 
+  
+  tm_shape(sce_substations_sf) +
+  tm_bubbles(col = "orange", size = 0.5) 
+
+# Print the map
+feeder_map1
+```
+
+```{r}
+# Define a color palette for the unique CIRCUIT_TYPE_DESC values
+circuit_colors <- c("Subtransmission" = "mediumblue",  # Medium Blue
+                    "Transmission" = "#D55E00")  # Bright Orange
+
+# Switch tmap to static mode
+tmap_mode("view")
+
+# Create a static map (for saving or non-interactive use)
+feeder_map2 <- tm_shape(sce_transmission_circuits) +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_lines(col = "CIRCUIT_TYPE_DESC",
+           palette = circuit_colors,
+           lwd = 3, 
+           fill_alpha = 0.7) + 
+  
+  tm_shape(sce_substations_sf) +
+  tm_bubbles(col = "gold",
+             size = 0.06) 
+
+# Print the map
+feeder_map2
+```
+

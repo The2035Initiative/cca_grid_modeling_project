@@ -1,0 +1,101 @@
+---
+title: "PG&E ICA Data Inspection"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(rosm)
+library(here)
+library(terra)
+library(ggmap)
+library(tmap)
+library(leaflet)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+library(ggspatial)
+# for origin-destination data methods
+library(sfnetworks)  
+library(tidyverse)
+library(RColorBrewer)
+```
+
+```{r read_data}
+pge_ica <- terra::vect(here("data", "Thrust_2.1_Building_Energy_DS", "grid_feeder_data", "PGE", "ICADisplay.gdb"))
+
+# Path to the geodatabase
+gdb_path <- here("data", "Thrust_2.1_Building_Energy_DS", "grid_feeder_data", "PGE", "ICADisplay.gdb")
+
+# Read the geodatabase without specifying a layer
+gdb <- terra::vect(gdb_path)
+
+# List all layers available in the geodatabase
+layers <- names(gdb)
+print(layers)
+
+```
+
+```{r}
+pge_ica
+```
+
+
+```{r}
+# Load the LineDetail layer (feeder lines)
+feeder_lines <- terra::vect(gdb_path, layer = "LineDetail")
+
+# Print the object to inspect
+print(feeder_lines)
+
+# Inspect the first few rows of the data
+head(feeder_lines)
+```
+```{r}
+# Check the type of geometries in the feeder_lines object
+geom_type <- geomtype(feeder_lines)
+ # Should return "line" if it's a line geometry
+print(geom_type) 
+```
+
+```{r}
+# Plot the feeder lines
+plot(feeder_lines, main = "Feeder Lines from LineDetail Layer")
+```
+```{r}
+# If feeder_lines is not already an sf object, convert it
+feeder_lines_sf <- st_as_sf(feeder_lines) %>% 
+  st_transform(4326) %>% 
+  st_make_valid()
+```
+
+```{r}
+# Switch tmap to mode
+tmap_mode("view")
+
+# Create a static map (for saving or non-interactive use)
+feeder_map <- tm_shape(feeder_lines_sf) +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_lines(col = "darkblue", lwd = 2, fill_alpha = 0.7)
+
+# Print the map
+#feeder_map
+```
+```{r}
+feeder_mao
+```
+
+

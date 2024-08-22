@@ -1,0 +1,89 @@
+---
+title: "Overlaying Google's Project Sunroof & Microsoft Building Footprint Data"
+author: "Sofia Ingersoll"
+---
+
+```{r}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+library(sf)
+library(tidyverse)
+```
+
+```{r}
+path_to_sunroof <- '../../../data/Thrust_2.1_Building_Energy_DS/rooftop_solar_potential_data/project-sunroof-census_tract.csv'
+
+sunroof_data <- read_csv(path_to_sunroof) %>% 
+  janitor::clean_names()
+
+sunroof_ca <- sunroof_data %>% 
+  filter(state_name == 'California')
+
+# Create polygons from lat/lng min/max
+create_polygon <- function(lat_min, lat_max, lng_min, lng_max) {
+  st_polygon(list(matrix(c(
+    lng_min, lat_min,
+    lng_min, lat_max,
+    lng_max, lat_max,
+    lng_max, lat_min,
+    lng_min, lat_min
+  ), ncol = 2, byrow = TRUE)))
+}
+
+# Convert to sf object with polygons
+sunroof_ca_sf <- sunroof_ca %>%
+  mutate(geometry = st_sfc(mapply(create_polygon, lat_min, lat_max, lng_min, lng_max, SIMPLIFY = FALSE))) %>%
+  st_as_sf(crs = 4326) %>% 
+  # Check for invalid geometries
+  st_make_valid()
+
+
+# Read GeoJSON file
+path_to_buildings = '../../../data/Thrust_2.1_Building_Energy_DS/building_type_data/California.geojson'
+
+buildings <- st_read(path_to_buildings) %>% 
+  st_transform(4326) %>% 
+  st_make_valid()
+```
+
+### Initial quick overlay visual
+```{r}
+# Plot using ggplot2
+ggplot() +
+  geom_sf(data = sunroof_ca, fill = "blue", alpha = 0.5, color = "black", show.legend = TRUE) +
+  geom_sf(data = building, fill = "red", alpha = 0.5, color = "black", show.legend = TRUE) +
+  labs(title = "Visualization of Sunroof Polygons and Building Data",
+       x = "Longitude",
+       y = "Latitude") +
+  theme_minimal()
+```
+
+```{r}
+# Check for invalid geometries
+invalid_buildings <- st_is_valid(buildings, reason = TRUE)
+
+invalid_sunroof <- st_is_valid(sunroof_ca, reason = TRUE)
+
+# Print invalid geometries (if any)
+print(sum(!invalid_sunroof))
+print(sum(!invalid_buildings))
+```
+
+### St_within join
+```{r}
+# the length of sunroof_ca is 7991
+# the length of buildings is 
+ca_homes <- st_join(sunroof_ca, bulidings,
+                    .predicate = st_within())
+ca_homes
+
+plot(ca_homes)
+```
+
