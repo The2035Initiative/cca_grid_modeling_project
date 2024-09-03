@@ -45,15 +45,11 @@ lead_data <- read_csv(
 lead_data$`Geography ID` <- str_remove(lead_data$`Geography ID`, "^0+")
 
 lead_data <- lead_data %>% 
-  rename(GEOID = `Geography ID`)
+  rename(GEOID = `Geography ID`) %>% 
+  mutate(GEOID = as.numeric(GEOID))
 
 lead_data
 ```
-
-```{r}
-plot(lead_data)
-```
-
 
 #### Household Characteristics
 
@@ -85,7 +81,8 @@ This does not contain exact location, only census tract level data
 lead_fpl_data <-  read_csv(here("data", "Thrust_2.1_Building_Energy_DS", "building_type_data", "CA-2018-LEAD-data", "CA FPL Census Tracts 2018.csv"))
 
 lead_fpl_data <- lead_fpl_data %>% 
-  rename(GEOID = FIP)
+  rename(GEOID = FIP) %>% 
+  mutate(GEOID = as.numeric(GEOID))
 
 head(lead_fpl_data)
 ```
@@ -97,10 +94,10 @@ This does not contain exact location, only census tract level data
 lead_smi_data <-  read_csv(here("data", "Thrust_2.1_Building_Energy_DS", "building_type_data", "CA-2018-LEAD-data", "CA SMI Census Tracts 2018.csv"))
 
 lead_smi_data <- lead_smi_data %>% 
-  rename(GEOID = FIP)
+  rename(GEOID = FIP) %>% 
+  mutate(GEOID = as.numeric(GEOID))
 
 head(lead_smi_data)
-
 ```
 ### AMI Data overview
 
@@ -110,10 +107,10 @@ This does not contain exact location, only census tract level data
 lead_ami_data <-  read_csv(here("data", "Thrust_2.1_Building_Energy_DS", "building_type_data", "CA-2018-LEAD-data", "CA AMI Census Tracts 2018.csv"))
 
 lead_ami_data <- lead_ami_data %>% 
-  rename(GEOID = FIP)
+  rename(GEOID = FIP) %>% 
+  mutate(GEOID = as.numeric(GEOID))
 
 head(lead_ami_data)
-
 ```
 
 ### Combining Query and FPL data with census tract .shp data to map
@@ -121,14 +118,28 @@ head(lead_ami_data)
 combined_lead <- full_join(lead_data, lead_fpl_data, by = "GEOID")
 
 head(combined_lead)
-
 ```
 
 ```{r read_spatial}
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  tract data   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# path to your Excel file
+tract_path <- here("data", "Thrust_1.1_DAC_Survey","tl_2021_06_tract", "tl_2021_06_tract.shp")
 
+# names of all sheets in the Excel file
+ct_sf <- st_read(tract_path) %>% 
+  st_transform(4326) %>% 
+  st_make_valid()
+
+
+ct_sf$GEOID <- str_remove(ct_sf$GEOID, "^0+")
+
+ct_sf
 ```
 
 ```{r join_spatial}
+lead_sf <- full_join(ct_sf, combined_lead, by = "GEOID")
 
 ```
 

@@ -71,6 +71,8 @@ geom_type <- geomtype(feeder_lines)
 print(geom_type) 
 ```
 
+Open in QGIS to zoom in 
+
 ```{r}
 # Plot the feeder lines
 plot(feeder_lines, main = "Feeder Lines from LineDetail Layer")
@@ -95,7 +97,7 @@ feeder_map <- tm_shape(feeder_lines_sf) +
 #feeder_map
 ```
 ```{r}
-feeder_mao
+feeder_map
 ```
 
 

@@ -58,9 +58,22 @@ feeder_map
 
 
 ```{r}
-# plot based on voltage 
+# plot based on kV
 ggplot(sdge_substations) +
   geom_sf(aes(fill = SUBSTATION)) +
   guides(fill = guide_none())
 ```
+```{r}
+# Switch tmap to view mode
+tmap_mode("view")
+
+# Create a map (for saving or interactive use)
+feeder_map <- tm_shape(sdge_substations) +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_polygons(col = "SUBSTATION",
+              fill_alpha = 0.5)
+
+feeder_map
+```
+
 

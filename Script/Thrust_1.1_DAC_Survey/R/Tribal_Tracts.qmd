@@ -1,0 +1,57 @@
+---
+title: "Tribal Census Tract Data Inspection"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(here)
+library(terra)
+library(tmap)
+library(leaflet)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+# for origin-destination data methods
+library(sfnetworks)  
+library(tidyverse)
+library(RColorBrewer)
+```
+
+```{r}
+tribal_tracts <- st_read(here("data","Thrust_1.1_DAC_Survey", "Federally_Recognized_Tribal_Lands")) %>% 
+  st_transform(4326) %>% 
+  st_make_valid()
+
+tribal_tracts
+```
+
+```{r}
+plot(tribal_tracts)
+```
+
+```{r}
+# Switch tmap to view mode
+tmap_mode("view")
+
+# Create a map (for saving or interactive use)
+tribal_map <- tm_shape(tribal_tracts) +
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_polygons(col = "purple4")
+
+tribal_map
+```
+

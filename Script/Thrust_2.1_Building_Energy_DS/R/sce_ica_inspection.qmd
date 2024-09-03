@@ -120,9 +120,10 @@ feeder_map2 <- tm_shape(sce_transmission_circuits) +
   
   tm_shape(sce_substations_sf) +
   tm_bubbles(col = "gold",
-             size = 0.06) 
+             size = 0.0006) 
 
 # Print the map
 feeder_map2
 ```
 
+Assigning homes to substation using this data: based on capacity
