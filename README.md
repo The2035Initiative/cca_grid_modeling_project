@@ -23,14 +23,17 @@ A hosting capacity example providing insight into the hosting capacity available
 - [CDC's Social Vulnerability Index (SVI)](https://www.atsdr.cdc.gov/placeandhealth/svi/index.html)
 - [US Climate Vulnerability Index: Overall Climate Vulnerability in The U.S.](https://map.climatevulnerabilityindex.org/map/cvi_overall/usa?mapBoundaries=Tract&mapFilter=0&reportBoundaries=Tract&geoContext=State)
 
-### Energy Data
-- [Annual Technology Baseline 2024 NREL](https://data.openei.org/s3_viewer?bucket=oedi-data-lake&prefix=ATB%2Felectricity%2Fcsv%2F2024%2F)
+### Tentative Grid Modeling Data
+#### Community Solar Potential Data
+- [Distribution/Feeder Level Energy Data](https://docs.google.com/document/d/1FnG5yLb88fweziRooK8i7kW2kHb1mXx5m4DHZSH7d0c/edit?usp=sharing)
+
+#### Rooftop Solar Potential Data
 - [Google’s Project Sunroof](https://sunroof.withgoogle.com/data-explorer/place/ChIJPV4oX_65j4ARVW8IJ6IJUYs/#?overlay=flux)
-- [Tracking the Sun Berkeley Lab](https://emp.lbl.gov/tracking-the-sun/): [Summary Data Tables XLXS](https://emp.lbl.gov/sites/default/files/emp-files/7_summary_tables_and_figures.xlsx)
-- [Microsoft US Building Footprints](https://github.com/microsoft/USBuildingFootprints)
-- [Commercial Building Energy Consumption Survey (CBECS)](https://www.eia.gov/consumption/commercial/) / [Building Activity tables 2018](https://www.eia.gov/consumption/commercial/data/2018/) / [Table B4](https://www.eia.gov/consumption/commercial/data/2018/bc/pdf/b4.pdf)
-- [United States Census Bureau: American Community Survey (ACS)](https://www.census.gov/programs-surveys/acs/data.html): [Housing data](https://data.census.gov/table/ACSDP5YAIAN2015.DP04?q=DP04&t=Financial%20Characteristics:Heating%20and%20Air%20Conditioning%20(HVAC):Homeownership%20Rate:Housing:Housing%20Units:Physical%20Characteristics:Telephone,%20Computer,%20and%20Internet%20Access:Types%20of%20Rooms:Units%20and%20Stories%20in%20Structure:Water,%20Sewage,%20and%20Plumbing%20Facilities:Year%20Structure%20Built&g=040XX00US06)
-- [Zillow](www.zillow.com/research/about-us) requested data access to internal categorized building-type datasets at the smallest granular level on 30 July 2024.
+
+#### Building Type Data
+- [Zillow](www.zillow.com/research/about-us)
+
+  In communication regarding data access to internal categorized building-type datasets at the smallest granular level. (4 Sept. 2024)
 
 
 ##### Data Notes
@@ -58,10 +61,26 @@ The data provided by [Climate & Health Vulnerability Indicators for CA (Climate 
 |          └── collective_map.qmd
 |          └── relating_datasets.qmd
 |          └── dissolving_block_groups_into_census_tracts.qmd
+|          └── Tribal_Tracts.qmd
+|          └── CA_Federally_Recognized_Tribal_Lands_map.html
 |
 |   ├── Thrust_2.1_Building_Energy_DS/
 |       ├── Python/
 |          └── ca_grid_model_data_exploration.ipynb
+|          └── feeder_data_exploration.ipynb
+|       ├── QGIS/
+|          └── SDGE_Substation_Footprints.qgz
+|          └── combined_feeder_map.qgz
+|          └── pge_feeder_map.qgz
+|          └── sce_map.qgz
+|       ├── R/
+|          └── LEAD_building_data.qmd
+|          └── google_sunroof_data_inspection.qmd
+|          └── overlay_sunroof_building_data.qmd
+|          └── pge_ica_gdb_exploration.qmd
+|          └── sce_ica_inspection.qmd
+|          └── sdge_substation_footprint_exploration.qmd
+|          └── substation_tiff_inspection.qmd
 |
 ├── Deliverables/
 |   ├── Thrust_1.1_DAC_Survey/
