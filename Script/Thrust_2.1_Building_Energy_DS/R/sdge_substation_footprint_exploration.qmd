@@ -43,6 +43,9 @@ plot(sdge_substations)
 head(sdge_substations)
 colnames(sdge_substations)
 ```
+
+
+
 ```{r}
 # Switch tmap to view mode
 tmap_mode("view")
@@ -56,6 +59,9 @@ feeder_map <- tm_shape(sdge_substations) +
 feeder_map
 ```
 
+### How do we assign houses in overlapping footprints
+
+Missing substation data, need from CA dataset w/ CA Energy Commission to assign feeder footprints to substations.
 
 ```{r}
 # plot based on kV

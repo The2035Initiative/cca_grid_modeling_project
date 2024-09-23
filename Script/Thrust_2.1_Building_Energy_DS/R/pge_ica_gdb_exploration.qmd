@@ -72,6 +72,7 @@ print(geom_type)
 ```
 
 Open in QGIS to zoom in 
+The amoiunt is showing distribution 
 
 ```{r}
 # Plot the feeder lines

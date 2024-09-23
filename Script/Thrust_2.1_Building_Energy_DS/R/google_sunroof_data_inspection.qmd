@@ -37,7 +37,10 @@ sunroof_data <- read_csv(path_to_sunroof,
 
 sunroof_ca <- sunroof_data %>% 
   filter(state_name == 'California')
+```
 
+
+```{r sf_wrangle}
 # Create polygons from lat/lng min/max
 create_polygon <- function(lat_min, lat_max, lng_min, lng_max) {
   st_polygon(list(matrix(c(

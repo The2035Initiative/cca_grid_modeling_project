@@ -1,0 +1,635 @@
+---
+title: "Assigning Sunroof Data to the CT Level"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(here)
+library(tmap)
+library(readxl)
+library(leaflet)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+library(tidyverse)
+library(RColorBrewer)
+```
+
+Building pv data: join by GEOID + CT.TL for PV data. Ignoring the geospatial data provided by proj. Sunroof. 
+Color by yearly_sunlight_kwh_total and gain an intuitive sense of the energy collection. More intense kwh in areas with greater rooftop.
+If it’s a 1:1 GEOID match = okay
+If not, find data method source or deduce 
+
+
+```{r read_n_wrangle}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  Read & Subset P.S.   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+path_to_sunroof <- '../../../data/Thrust_2.1_Building_Energy_DS/rooftop_solar_potential_data/project-sunroof-census_tract.csv'
+
+sunroof_data <- read_csv(path_to_sunroof,
+                         show_col_types = F) %>% 
+  janitor::clean_names()
+
+sunroof_ca <- sunroof_data %>% 
+  filter(state_name == 'California') %>% 
+  rename('GEOID' = 'region_name')
+
+head(sunroof_ca)
+```
+### Check point
+
+This confirms that we do not have a 1:1 GEOID match. I am still going to assign each observation to the appropriate ct GEOID
+
+Researching quickly before doing any data processing but ideas I have for census tracts with ore than one observation is to average. I feel like that would not be the best option because we are losing data. 
+
+Uh oh, we expect a minimum of at least 8057 census tracts for the state of CA. There is a strong likelihood we are do not have the entire state contained in this data. 
+
+- Contacted the data managers about the missing data between the toggle map website & data download website. Need to find another contact.
+- Note that does not account for all missing data: some regions may not meet the qualifications required and defined on the data resource page in our shared drive for Thrust 2.1 of the project. 
+```{r ct_check}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----      GEOID Checks     ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# How many ct are repeating?
+print(paste("There are",length(sunroof_ca$GEOID), "observations in project sunroof"))
+print(paste("There are",length(unique(sunroof_ca$GEOID)), "unique census tracts in project sunroof"))
+print(paste("Resulting in",length(sunroof_ca$GEOID)-length(unique(sunroof_ca$GEOID)), "repeating census tracts"))
+```
+
+```{r read_tl}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  Read & Check TL Data ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+census_tract <- st_read(here("data", "Thrust_2.1_Building_Energy_DS","rooftop_solar_potential_data","tl_2023_06_tract", "tl_2023_06_tract.shp"),
+                        quiet = T)
+#census_tract <- st_read(here("data", "Thrust_2.1_Building_Energy_DS","rooftop_solar_potential_data","tl_2022_06_tract", "tl_2022_06_tract.shp"),
+                       # quiet = T)
+
+census_tract
+
+print(paste("There are", length(census_tract$GEOID), "GEOID in the tigerline data"))
+```
+```{r ct_geometry}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ---- Subset TL GEOID Geoms ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# isolate geoid & geometry for ct
+ct <- census_tract %>% 
+  select(GEOID, geometry)
+```
+
+### Aggregating Geometries
+
+Seeing that some census tracts are repetitive in the Google Sunroof Data, we will aggregate the non-unique observations by GEOID. Our process will include a summation for the count columns respectively and averaging the percentage and median columns respectively. We expect the aggregated output to contain 7504 observations.
+
+```{r sunroof_ct_agg}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  Standarize P.S. Data ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Convert relevant columns to numeric
+sunroof_ca <- sunroof_ca %>%
+  mutate(
+    GEOID = as.numeric(GEOID),
+    yearly_sunlight_kwh_kw_threshold_avg = as.numeric(yearly_sunlight_kwh_kw_threshold_avg),
+    count_qualified = as.numeric(count_qualified),
+    percent_covered = as.numeric(percent_covered),
+    percent_qualified = as.numeric(percent_qualified),
+    number_of_panels_n = as.numeric(number_of_panels_n),
+    number_of_panels_s = as.numeric(number_of_panels_s),
+    number_of_panels_e = as.numeric(number_of_panels_e),
+    number_of_panels_w = as.numeric(number_of_panels_w),
+    number_of_panels_f = as.numeric(number_of_panels_f),
+    number_of_panels_median = as.numeric(number_of_panels_median),
+    number_of_panels_total = as.numeric(number_of_panels_total),
+    kw_median = as.numeric(kw_median),
+    kw_total = as.numeric(kw_total),
+    yearly_sunlight_kwh_n = as.numeric(yearly_sunlight_kwh_n),
+    yearly_sunlight_kwh_s = as.numeric(yearly_sunlight_kwh_s),
+    yearly_sunlight_kwh_e = as.numeric(yearly_sunlight_kwh_e),
+    yearly_sunlight_kwh_w = as.numeric(yearly_sunlight_kwh_w),
+    yearly_sunlight_kwh_f = as.numeric(yearly_sunlight_kwh_f),
+    yearly_sunlight_kwh_median = as.numeric(yearly_sunlight_kwh_median),
+    yearly_sunlight_kwh_total = as.numeric(yearly_sunlight_kwh_total),
+    carbon_offset_metric_tons = as.numeric(carbon_offset_metric_tons),
+    existing_installs_count = as.numeric(existing_installs_count)
+  )
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  Aggregate P.S. Data  ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Aggregate sunroof_data by GEOID
+sunroof_ca_agg <- sunroof_ca %>%
+  group_by(GEOID) %>%
+  summarize(
+    GEOID = first(GEOID),  # Retain first GEOID
+    state_name = first(state_name),  # Retain first state_name
+    yearly_sunlight_kwh_kw_threshold_avg = mean(yearly_sunlight_kwh_kw_threshold_avg, na.rm = TRUE),  # Mean of threshold avg
+    count_qualified = sum(count_qualified, na.rm = TRUE),  # Sum of count_qualified
+    percent_covered = mean(percent_covered, na.rm = TRUE),  # Mean of percent_covered
+    percent_qualified = mean(percent_qualified, na.rm = TRUE),  # Mean of percent_qualified
+    number_of_panels_n = sum(number_of_panels_n, na.rm = TRUE),  # Sum of number_of_panels_n
+    number_of_panels_s = sum(number_of_panels_s, na.rm = TRUE),  # Sum of number_of_panels_s
+    number_of_panels_e = sum(number_of_panels_e, na.rm = TRUE),  # Sum of number_of_panels_e
+    number_of_panels_w = sum(number_of_panels_w, na.rm = TRUE),  # Sum of number_of_panels_w
+    number_of_panels_f = sum(number_of_panels_f, na.rm = TRUE),  # Sum of number_of_panels_f
+    number_of_panels_median = mean(number_of_panels_median, na.rm = TRUE),  # Mean of number_of_panels_median
+    number_of_panels_total = sum(number_of_panels_total, na.rm = TRUE),  # Sum of number_of_panels_total
+    kw_median = mean(kw_median, na.rm = TRUE),  # Mean of kw_median
+    kw_total = sum(kw_total, na.rm = TRUE),  # Sum of kw_total
+    yearly_sunlight_kwh_n = sum(yearly_sunlight_kwh_n, na.rm = TRUE),  # Sum of yearly_sunlight_kwh_n
+    yearly_sunlight_kwh_s = sum(yearly_sunlight_kwh_s, na.rm = TRUE),  # Sum of yearly_sunlight_kwh_s
+    yearly_sunlight_kwh_e = sum(yearly_sunlight_kwh_e, na.rm = TRUE),  # Sum of yearly_sunlight_kwh_e
+    yearly_sunlight_kwh_w = sum(yearly_sunlight_kwh_w, na.rm = TRUE),  # Sum of yearly_sunlight_kwh_w
+    yearly_sunlight_kwh_f = sum(yearly_sunlight_kwh_f, na.rm = TRUE),  # Sum of yearly_sunlight_kwh_f
+    yearly_sunlight_kwh_median = mean(yearly_sunlight_kwh_median, na.rm = TRUE),  # Mean of yearly_sunlight_kwh_median
+    yearly_sunlight_kwh_total = sum(yearly_sunlight_kwh_total, na.rm = TRUE),  # Sum of yearly_sunlight_kwh_total
+    carbon_offset_metric_tons = sum(carbon_offset_metric_tons, na.rm = TRUE),  # Sum of carbon_offset_metric_tons
+    existing_installs_count = sum(existing_installs_count, na.rm = TRUE)  # Sum of existing_installs_count
+  )
+
+# View the aggregated data
+sunroof_ca_agg
+```
+### Join GEOID of Project Sunroof & TIGER/Line
+
+```{r join_sunroof_tl}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----     Join P.S. + TL    ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ct_pv <- ct %>%
+  mutate(GEOID = as.numeric(GEOID)) %>% 
+  left_join(sunroof_ca_agg, by = "GEOID")
+
+ct_pv
+
+# save as spatial object
+ct_pv <- st_as_sf(ct_pv) %>% 
+  st_transform(4269) %>% 
+  st_make_valid()
+
+print(st_geometry(ct_pv))
+```
+
+```{r summary_stats_pstl}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  Join Summary Stats   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# project sunroof tigerline summary stats
+summary(ct_pv$yearly_sunlight_kwh_total)
+quantile(ct_pv$yearly_sunlight_kwh_total, na.rm =T)
+```
+
+### Plot Sunroof + TIGER/Line
+```{r map_yearly_sunlight_kwh_tot_grey_na}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  Map Yearly Sun/kWH   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Calculate 4 quantiles
+quantile_breaks <- quantile(ct_pv$yearly_sunlight_kwh_total, probs = seq(0, 1, 0.25), na.rm = TRUE)
+
+# Create custom labels with kWh ranges
+quantile_labels <- paste0(
+  format(round(quantile_breaks[-length(quantile_breaks)] / 1e6, 2), big.mark = ",", scientific = FALSE), 
+  "M - ",
+  format(round(quantile_breaks[-1] / 1e6, 2), big.mark = ",", scientific = FALSE), 
+  "M kWh"
+)
+
+# Create 4 quantile groups with the custom labels
+ct_pv_quant <- ct_pv %>%
+  mutate(
+    sunlight_quantile = cut(
+      yearly_sunlight_kwh_total,
+      breaks = quantile_breaks,
+      include.lowest = TRUE,
+      labels = quantile_labels
+    )
+  )
+
+# Plot using the quantiles
+ggplot() +
+  geom_sf(data = ct_pv_quant, aes(fill = sunlight_quantile)) +
+  scale_fill_brewer(
+    # Sequential color scale (Blues)
+    palette = "Blues",  
+    # Color for NA values
+    na.value = "grey50",  
+    # Use the custom labels with kWh ranges
+    labels = quantile_labels 
+  ) +
+  labs(
+    title = "Yearly Sunlight Energy Potential (kWh) by Quantiles",
+    fill = "Yearly Sunlight (kWh)"
+  ) +
+  theme_minimal() +
+  theme(
+    # Larger, readable text
+    legend.text = element_text(size = 10), 
+    # Increase height of legend items
+    legend.key.height = unit(1.5, "cm"),          
+    # Increase width of legend keys
+    legend.key.width = unit(2, "cm"),        
+    # More vertical space between legend items
+    legend.spacing.y = unit(0.7, "cm"),                   
+    # Increase legend title size for readability
+    legend.title = element_text(size = 11),  
+    # Position the legend to the right
+    legend.position = "right"                             
+  )
+```
+
+
+```{r existing_ct_no_na_map}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----      Map Without NA   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Remove missing data
+ct_pv_filtered <- ct_pv %>% filter(!is.na(yearly_sunlight_kwh_total))
+
+# Calculate 4 quantiles
+quantile_breaks <- quantile(ct_pv_filtered$yearly_sunlight_kwh_total, probs = seq(0, 1, 0.25), na.rm = TRUE)
+
+# Create custom labels with kWh ranges
+quantile_labels <- paste0(
+  format(round(quantile_breaks[-length(quantile_breaks)] / 1e6, 2), big.mark = ",", scientific = FALSE), 
+  "M - ",
+  format(round(quantile_breaks[-1] / 1e6, 2), big.mark = ",", scientific = FALSE), 
+  "M kWh"
+)
+
+# Create 4 quantile groups with the custom labels
+ct_pv_filtered <- ct_pv_filtered %>%
+  mutate(
+    sunlight_quantile = cut(
+      yearly_sunlight_kwh_total,
+      breaks = quantile_breaks,
+      include.lowest = TRUE,
+      labels = quantile_labels
+    )
+  )
+
+# Plot using the quantiles
+ggplot() +
+  geom_sf(data = ct_pv_filtered, aes(fill = sunlight_quantile)) +
+  scale_fill_brewer(
+    palette = "Oranges",  
+    na.value = "grey50",
+    labels = quantile_labels  
+  ) +
+  labs(
+    title = "Yearly Sunlight Energy Potential (kWh) by Quantiles",
+    fill = "Yearly Sunlight (kWh)"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.text = element_text(size = 10),           
+    legend.key.height = unit(1.5, "cm"),         
+    legend.key.width = unit(2, "cm"),          
+    legend.spacing.y = unit(0.7, "cm"),                
+    legend.title = element_text(size = 11),             
+    legend.position = "right"                             
+  )
+```
+
+### Save Data
+
+We can see using plotting above and Esri Mapping products like QGIS to visualize the sparseness of the data.
+```{r eval = FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----       Save Data       ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Create 4 quantile groups with the custom labels
+ct_pv_filtered_2 <- ct_pv %>% filter(!is.na(yearly_sunlight_kwh_total))
+
+# Convert to sf object if not already
+ct_pv_sf <- st_as_sf(ct_pv_filtered_2, coords = "geometry", remove = FALSE)
+
+# Save as GeoJSON
+file_path <- here("data", "Thrust_2.1_Building_Energy_DS","rooftop_solar_potential_data", "census_tract_pv","census_tract_pv.geojson")
+
+st_write(ct_pv_sf, file_path, driver = "GeoJSON")
+
+# Save as Shapefile
+file_path2 <- here("data", "Thrust_2.1_Building_Energy_DS","rooftop_solar_potential_data", "census_tract_pv","census_tract_pv.shp")
+
+st_write(ct_pv_sf, file_path2, driver = "ESRI Shapefile")
+```
+
+### What's going on with the Missing CT?
+
+Let's inspect the problem areas, why are they empty?
+Are the GEOID not matching?
+
+First we'll inspect how the discrepancies between Project Sunroof and Census TIGER/Line GEOID and get a sense of how many are missing.
+- It's important to note that TIGER/Line includes additional boundaries for rivers and special geographic features. This is why there are more than 8,057 observations in the TIGER/Line object. 
+- We found 1,042 observations in the TIGER/Line are not accounted for in the Project Sunroof data.
+- When comparing the GEOIDs that did not match, 0 observations were missing from the Project Sunroof data. This confirms our suspicion that these additional observations are geographical features in the TIGER/Line.
+
+To get a more accurate understanding of how many census tracts are properly represented, we're going to compare the Google Project Sunroof to a list of the 8,057 CA census tract GEOIDs. 
+- Upon inspection, only one GEOID from the Project Sunroof was not accounted for in the CA census tract list.
+
+
+Now, let's join census tract TIGER/Line with the CA tract list to see what is matching vs missing. 
+- The number of GEOID in the TIGER/Line not present in the CA Census Tract list is 2248 and we expected there to be 1072 missing GEOID. Therefore, 1176 census tract GEOID are missing from the TIGER/Line data.
+- Further validation proves the number of GEOID in the CA Census Tract list not present in the TIGER/Line is 1176.
+
+Comparing the CA Tract List data to Project Sunroof GEOID revealed there are 7504 unique GEOIDs in the Project Sunroof Data.
+- When combining with the CA Census Tract List, 7503 GEOIDs are accounted for.
+- When combining this data with the TIGER/Line geometries a simple feature collection with 7503 features and 24 fields (with 1041 geometries empty) are produced. Providing geometry for only 6462 census tracts.
+
+```{r sunroof_ct_vs_tiger_ct}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ---- Identify Missing GEOID ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# isolate unique geoid
+sunroof_geoids <- unique(sunroof_ca$GEOID) %>% 
+  as.data.frame() 
+
+colnames(sunroof_geoids) <- "GEOID"
+
+head(sunroof_geoids, 3)
+
+ct_geoids <- unique(ct_pv$GEOID) %>% 
+  as.data.frame() 
+
+colnames(ct_geoids) <- "GEOID"
+
+head(ct_geoids, 3)
+
+# what geoids are different?
+geoids_in_sunroof_not_ct <- setdiff(sunroof_geoids, ct_geoids)
+
+geoids_in_sunroof_not_ct
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  P.S. Missing GEOID   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# let's select these geoids from sunroof_ca that are not in ct tigerline
+# 0 bs, all census tracts are accounted for from the project sunroof data
+sunroof_ca_missing_in_ct <- sunroof_ca %>%
+  filter(GEOID %in% geoids_in_sunroof_not_ct)
+
+# 0 observations confirms our suspicion that these additional observations are geographical features in the TIGER/Line
+print(sunroof_ca_missing_in_ct)
+```
+
+```{r census_tract_list}
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  tract data   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~
+# path to your Excel file
+tract_path <- here("data", "Thrust_1.1_DAC_Survey","Tract-level-CA-HTC-Index-for-public-website-download-20190304.xlsx")
+
+# names of all sheets in the Excel file
+sheet_names <- readxl::excel_sheets(tract_path)
+
+# read the fourth sheet directly by its index
+tract_list <- readxl::read_xlsx(tract_path, sheet = sheet_names[1]) %>% 
+  janitor::clean_names() %>%
+  as.data.frame() %>% 
+  select(geoid) %>%   
+  mutate(GEOID = geoid) %>% 
+  distinct(GEOID) %>% 
+  mutate(GEOID = as.numeric(GEOID))
+
+# 8057 obs
+tract_list
+```
+
+```{r sunroof_ct_vs_tract_list}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----   P.S. Missing GEOID  ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# what geoids are different? In P.S. not, in tractlist
+geoids_in_sunroof_not_tract_list <- setdiff(sunroof_geoids, tract_list)
+
+geoids_in_sunroof_not_tract_list
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ---- Tractlist Missing GEOID ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# what's missing from the complete tract list?
+tract_list_geoids_not_in_sunroof <- setdiff(tract_list, sunroof_geoids)
+
+# As expected, 554 CA census tracts are not accounted for in the project sunroof data 
+tract_list_geoids_not_in_sunroof
+```
+
+```{r tigerline_vs_ca_tract_list}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----    T.L. Missing GEOID   ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# what geoids are different? In TL not, in tractlist
+# find the GEOID differences between ct_geoids and tract_list
+missing_geoids <- setdiff(ct_geoids$GEOID, tract_list$GEOID) %>% 
+  as.data.frame()
+
+colnames(missing_geoids) <- "GEOID"
+
+# check the results for geoid in TL not tractlist
+print(paste("The number of GEOID in the TIGER/Line not present in the CA Census Tract list is", 
+            # compare length of missing ct
+            length(missing_geoids$GEOID), 
+            "and we expected there to be", 
+            # expectation comparing tract list (8057) to T.L (9129)
+            (length(unique(ct_geoids$GEOID)) - length(unique(tract_list$GEOID))), 
+            "missing GEOID. Therefore,",
+            # comparing the number of missing ct with the expected size of the output
+            (nrow(missing_geoids) - (length(unique(ct_geoids$GEOID)) - length(unique(tract_list$GEOID)))),
+            "census tract GEOID are missing from the TIGER/Line data."))
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ---- Tractlist Missing GEOID ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# what geoids are different? In tract list not, in TIGER/Line
+# find the GEOID differences between ct_geoids and tract_list
+comparing_geoids <- setdiff(tract_list$GEOID, ct_geoids$GEOID)%>% 
+  as.data.frame()
+
+colnames(comparing_geoids) <- "GEOID"
+
+# check the results
+print(paste("Further validation proves the number of GEOID in the CA Census Tract list not present in the TIGER/Line is", 
+            length(comparing_geoids$GEOID),"."))
+```
+
+```{r join_tractlist_ct_pv_filter_na}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ----  Join Census Tracts  ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# let's join the data and visualize it 
+# this contains values 
+tract_list_joined <-  left_join(tract_list, ct_pv, by = "GEOID") 
+
+tract_list_joined
+
+tract_list_filtered <- tract_list_joined %>%
+  filter(!is.na(yearly_sunlight_kwh_total))
+
+tract_list_filtered 
+
+#plot(tract_list_joined$GEOID)
+# are these identical with the sunroof_ca_missing_in_ct?
+#missing_ct <- setdiff(sunroof_ca_missing_in_ct$GEOID, missing_geoids$GEOID)
+```
+
+When combining the CA Census Tract List with the Project Sunroof Data, 7503/8057 
+
+When combining CA Census Tract List + Solar Data with the TIGER/Line data, there are 1041 empty geometries provided.
+
+```{r combining_all_data}
+# first combine the census tract information with the aggregated sunroof data
+tract_list_solar <-  left_join(tract_list, sunroof_ca_agg, by = "GEOID") 
+
+# next remove all the observations that did not match
+tract_solar_filtered <- tract_list_solar %>%
+  filter(!is.na(yearly_sunlight_kwh_total))
+
+# quick check
+print(paste("There are",
+      nrow(sunroof_ca_agg),
+      "unique GEOIDs in the Project Sunroof Data. When combining with the CA Census Tract List,",
+      nrow(tract_solar_filtered),
+      "GEOIDs are accounted for. Now, when combining this data with the TIGER/Line geometries"))
+
+tract_solar_test <- ct %>% 
+  mutate(GEOID = as.numeric(GEOID)) %>% 
+  right_join(tract_solar_filtered, by = "GEOID") 
+
+
+tract_solar_test
+```
+
+### New Census Boundary data
+
+Using White House Map Data
+```{r}
+ct_fresh <- st_read(here("data", "Thrust_1.1_DAC_Survey","white_house_map","usa", "usa.shp"),
+                        quiet = T) 
+
+ct_fresh <- ct_fresh %>% 
+  filter(SF == "California") %>% 
+  mutate(GEOID = as.numeric(GEOID10))
+
+ct_fresh
+
+# what geoids are different? In TL not, in tractlist
+# find the GEOID differences between ct_geoids and tract_list
+missing_geoid <- setdiff(ct_fresh$GEOID, tract_list$GEOID) %>% 
+  as.data.frame()
+
+colnames(missing_geoid) <- "GEOID"
+
+# check the results
+print(paste("The number of GEOID in the White House Map data not present in the CA Census Tract list is", 
+            length(missing_geoid$GEOID), 
+            "and we expect there to be", 
+            (length(unique(ct_fresh$GEOID)) - length(unique(tract_list$GEOID))), 
+            "missing GEOID."))
+
+# quick comparison of whitehouse data and solar data geoid
+# fabulous, it contains exactly what we need!
+extra_geoid <- setdiff(ct_fresh$GEOID, sunroof_ca_agg$GEOID) %>% 
+  as.data.frame()
+
+colnames(extra_geoid) <- "GEOID"
+
+extra_geoid
+```
+
+### White House Map Data Joined with Solar PV Data for CA!
+
+They are a perfect match! Let's put it all together, map and save!
+```{r join_whmap_solar_pv}
+# inner join
+solar_census <- inner_join(sunroof_ca_agg, ct_fresh, by = "GEOID")
+
+solar_census_sf <- st_as_sf(solar_census) %>% 
+  st_transform(4326) %>% 
+  st_make_valid()
+
+solar_census_sf
+
+#plot(solar_census_sf)
+
+
+# save as shapefile
+file_path <- here("data", "Thrust_2.1_Building_Energy_DS","rooftop_solar_potential_data", "census_tract_pv_whitehouse_data","census_tract_pv_whitehouse_data.gpkg")
+
+st_write(solar_census_sf, file_path, driver = "GPKG")
+```
+
+
+### SCRATCH WORK BELOW
+```{r missing_ct}
+missing_geoids <- ct_pv %>%
+  filter(is.na(yearly_sunlight_kwh_total)) %>%
+  select(GEOID)
+
+# View the unmatched GEOIDs
+print(missing_geoids)
+
+# Identify duplicate GEOIDs
+duplicates <- sunroof_ca %>%
+  group_by(GEOID) %>%
+  filter(n() > 1)
+
+duplicates
+```
+
+
+```{r join}
+# let's inspect the problem areas, why are they empty?
+# are the geoid not matching?
+empty_obs <- ct_pv %>% 
+  filter(st_is_empty(ct_pv) == TRUE)
+
+empty_obs <- empty_obs %>% 
+  arrange(desc(GEOID))
+
+empty_obs
+```
+
+
+```{r}
+ggplot() +
+  geom_sf(data = ct_pv, aes(fill = yearly_sunlight_kwh_total)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "grey50") +
+  labs(title = "Yearly Sunlight Energy Potential",
+       fill = "kWh/year") +
+  theme_minimal()
+```
+
+```{r join}
+file_path <- here("data", "Thrust_2.1_Building_Energy_DS","rooftop_solar_potential_data", "census_tract_pv","census_tract_pv.gpkg")
+# save our data for mapping later
+st_write(ct_pv, file_path)
+```
+```{r}
+print(st_geometry(ct_pv))
+```
+
+
+```{r}
+plot(ct_pv$yearly_sunlight_kwh_total)
+
+plot(ct_pv$geometry)
+```
+
