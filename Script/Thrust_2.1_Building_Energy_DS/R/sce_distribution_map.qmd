@@ -1,0 +1,440 @@
+---
+title: "SCE Distribution Circuit Mapping"
+author: "Sofia Ingersoll"
+---
+
+```{r set_up, message = FALSE, warning=FALSE}
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----             System Set Up         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Set working directory 
+knitr::opts_chunk$set(echo = TRUE)
+getwd()
+
+# to ensure observations are reproducible for everyone
+set.seed(123)
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#----            Load Libraries         ----
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+library(sf)
+library(here)
+library(terra)
+library(tmap)
+library(leaflet)
+library(viridis)
+library(maptiles)
+library(tmaptools)
+library(sfheaders)
+library(tidyverse)
+library(RColorBrewer)
+
+library(geojsonsf)
+
+library(httr)
+library(jsonlite)
+library(sf)
+```
+
+SCE has 4431 circuit segements represented for 923 substations
+```{r read_data}
+sce_circuits <- st_read(here("data","Thrust_2.1_Building_Energy_DS", "grid_feeder_data", "SCE", "Distribution_circuits", "Distribution_circuits.shp"))
+
+
+sce_circuits
+```
+
+```{r grouping_by_distribution_voltage}
+# isolating column 'voltage' in circuits dataset
+voltage_levels <- unique(sce_circuits$substation)
+
+
+# group by distribution output to simplify
+voltage_levels <- sce_circuits %>% 
+  # assign based on group output voltage, 9 groups total
+  mutate(distribution_outputs_kV = case_when(
+                                             # more flexible to collect all that include 2 (2, 2.4)
+                                             str_detect(substation, "/2\\.?[0-9]* kV") ~ "~2 kV distributed",
+                                             # more flexible to collect all that include 4 (4, 4.16, 4.8)
+                                             str_detect(substation, "/4\\.?[0-9]* kV") ~ "~4 kV distributed",  
+                                             str_detect(substation, "/7 kV") ~ "7 kV distributed",
+                                             str_detect(substation, "/12 kV") ~ "12 kV distributed",
+                                             # want this to be more flexible to collect all that include 13 (13), 13.8)
+                                             str_detect(substation, "/13\\.?[0-9]* kV") ~ "~13 kV distributed",
+                                             str_detect(substation, "/16 kV") ~ "16 kV distributed",
+                                             str_detect(substation, "/25 kV") ~ "25 kV distributed",
+                                             str_detect(substation, "/33 kV")~ "33 kV distributed",
+                                             str_detect(substation, "/220 kV") ~ "200 kV distributed, likely a computational error"))
+
+unique(voltage_levels$distribution_outputs_kV)
+```
+
+
+```{r eval = FALSE, check_data}
+sce_circuits %>%
+  filter(grepl("Test Sub", sub_name))
+
+# count unique circuit_vo for each substation
+substation_circuit_vo_summary <- voltage_levels %>%
+  # group by substation
+  # create a list of unique circuit_vo
+  group_by(sub_name) %>%                         
+  summarise(unique_circuit_vo = list(unique(circuit_vo)),
+            # count unique circuit_vo
+            unique_circuit_vo_count = n_distinct(circuit_vo),
+            # drop the grouping
+            .groups = 'drop')    
+```
+### Organizing Large Amounts of Data to be Informative 
+
+CA's grid is highly complex and substations provide to a wide breadth of customers. For this reason, a single substation can have over a thousand distribution circuits, making the visualization process overwhelming and a bit tedious. To alleviate visual overload and gain distirbution level insights, we will be employing categorized color coding, and binning to simplify our visualization.
+
+We will be grouping by categorized substation (sub_name) and assigning a color based on the substation's approximate distribution voltage. The colorblind friendly palette we will be using for our substations was provided by [David Nichols here](https://davidmathlogic.com/colorblind/#%23332288-%23117733-%2344AA99-%2388CCEE-%23DDCC77-%23CC6677-%23AA4499-%23882255). Once this is complete, a color ramp will be generated for each circuit (circuit_id) within a substation. For substations with more than 256 distinct line segments, binning will be employed to assign each circuit_id a color from the color ramp. 
+
+```{r distribution_voltage_group_colors}
+# color blind friendly palette
+voltage_colors <- c(
+                    "~2 kV distributed" = "#332288",
+                     
+                    "~4 kV distributed" =  "#88CCEE", 
+                     
+                    "7 kV distributed" =  "#44AA99",
+                    
+                    "12 kV distributed" =   "#117733",
+                     
+                    "~13 kV distributed" = "#DDCC77", 
+                     
+                    "16 kV distributed" = "#CC6677",
+                     
+                    "25 kV distributed" = "#AA4499",
+                 
+                    "33 kV distributed" = "#882255",
+             
+                    "200 kV distributed, likely a computational error" = "black"
+                    )
+```
+
+```{r eval = FALSE, color_ramp_length_check}
+# function to generate a color ramp from white to the assigned color
+generate_color_ramp <- function(base_color, n) {
+  colorRampPalette(c(base_color, "white"))(n)
+}
+
+
+# not necessary because we have less than 256 segments per station
+
+# function to check the length of potential color ramps for each voltage
+#check_color_ramp_lengths <- function(voltage_colors) {
+  # loop through each voltage color and check ramp length
+ # color_ramps <- sapply(names(voltage_colors), function(voltage) {
+    # number of colors that can be generated (maximum of 256)
+    # anything more leads to visual uncertainty
+  #  ramp_length <- length(generate_color_ramp(voltage_colors[[voltage]], 256))
+   # paste(voltage, "->", ramp_length, "colors")
+  #})
+  
+  #return(color_ramps)
+#}
+
+# check to make sure they reach 256
+#check_color_ramp_lengths(voltage_colors)
+```
+In the SCE data set, there are 923 substations with 58 different voltage levels. To visualize the substation distribution more effectively, we will employing categorization by approximate substation distribution voltage. For each substation, the associated circuit_id will be assigned a shade for the respective substation color ramp. 
+
+```{r more_data_wrangle}
+# update data for mapping, grouped by substation and count no. circuits/substation
+circuit_data <- voltage_levels %>%
+  # assign color based on distribution_outputs_kV
+  mutate(color_label = voltage_colors[distribution_outputs_kV]) %>% 
+  # group by substation
+  group_by(sub_name) %>%
+  # count the number of unique circuit_id associated with each sub_name
+  mutate(n_distribution_circuits = n_distinct(circuit_id)) %>% 
+  # reorder
+  dplyr::select("sub_name", "substation", "circuit_id", "circuit_vo", "n_distribution_circuits", 
+                "color_label", everything())
+          
+
+circuit_data
+
+# check the largest number of circuits per substation
+max(circuit_data$n_distribution_circuits)
+```
+```{r 1_error_not_reading_HEX, eval= FALSE}
+# Function to generate a color ramp from the assigned color to white
+generate_color_ramp <- function(base_color, n) {
+  colorRampPalette(c("white", base_color))(n)
+}
+
+# Process circuit data and assign colors
+circuit_data_colored <- circuit_data %>%
+  
+  # Ensure correct data types
+  mutate(circuit_id = as.integer(circuit_id)) %>%
+  
+  # Count the number of unique circuit_ids per substation
+  group_by(sub_name) %>%
+  mutate(n_distribution_circuits = as.integer(n_distinct(circuit_id))) %>%
+        
+  ungroup() %>%
+  
+  # Assign color ramp based on the number of circuits
+  mutate(circuit_color = case_when(
+    # If there is only one circuit, use the last assigned color label
+    n_distribution_circuits == 1 ~ color_label,
+    # If there are multiple circuits, generate a color ramp and assign colors
+    n_distribution_circuits > 1 ~ {
+      # Generate color ramp based on the first color label and the number of circuits
+      color_ramp <- generate_color_ramp(first(color_label), n_distribution_circuits)
+      
+      # Match the circuit_id to the unique circuit_ids and assign corresponding colors
+      circuit_colors <- color_ramp[match(circuit_id, unique(circuit_id))]
+      
+      # Return colors, ensuring they align with the original order
+     # circuit_colors[match(circuit_id, circuit_id)]
+    },
+  )) %>%
+  
+  # Reorder columns for better readability
+  select("sub_name", "substation", "circuit_id", "circuit_vo", 
+         "n_distribution_circuits", "circuit_color", "color_label", everything())
+
+# Display the processed circuit data
+circuit_data_colored
+
+```
+
+So, the HEX provided make sense, however, we're getting 630 warnings which is not good. This is due to the fact we are passing a vector value (n_distribution_circuits) in the place of an integer for n in the `generate_color_ramp()`. Upon inspecting the assigned circuit colors, the color ramps appear to have performed as expected. For now, we will proceed forward to the visualization. However, it is important to note and understand these warnings.
+
+```{r assigning_distribution_colors, 630_errors_but_loading_HEX}
+generate_color_ramp <- function(base_color, n) {
+  colorRampPalette(c("white", base_color))(n)
+}
+
+# update data for mapping 
+circuit_data_colored <- circuit_data %>%
+ 
+  mutate(
+    
+    # correct data types
+     circuit_id = as.integer(circuit_id),
+    
+    # assign color ramp based on the binned circuits
+    circuit_color = case_when(
+      # case_when to assign circuit colors based on the number of circuits
+      # only using substation color if there's only 1 circuit segment
+      n_distribution_circuits == 1 ~ first(color_label),
+      # for those will more than one circuit segment
+      n_distribution_circuits > 1 ~ {
+        # generate a color ramp the length of the number of substation circuits
+        color_ramp <- generate_color_ramp(first(color_label), n_distribution_circuits)
+        # use the bin column to assign color ramp shade for each substation circuit
+        color_ramp[match(circuit_id, unique(circuit_id))] 
+      },
+      # unexpected values
+      TRUE ~ NA_character_
+      
+    )) %>%
+  ungroup() %>% 
+  # reorder the columns so the substation name appears when we hover over a line
+  dplyr::select("sub_name", "substation", "circuit_id", "circuit_vo", "n_distribution_circuits",  "circuit_color", 
+                "color_label", everything())
+
+circuit_data_colored
+```
+```{r}
+circuit_data_colored %>% 
+  dplyr::filter(sub_name == "Greening 69/12 Kv")
+```
+```{r saving_sce_data}
+filepath <- file.path(here("data", "Thrust_2.1_Building_Energy_DS", "grid_feeder_data", "SCE", "processed", "sce_distribution_line_data.shp"))
+
+st_write(circuit_data, filepath, append = FALSE)
+
+```
+
+
+```{r eval = FALSE, initial_visual_check}
+ggplot(data = circuit_data_colored) +
+  geom_sf() +
+  theme_minimal() +
+  labs(title = "Circuit Data Visualization")
+```
+
+
+```{r official map, eval = FALSE}
+pop_up_columns <- c("sub_name", "substation", "circuit_id", "circuit_vo", "n_distribution_circuits", "circuit_color", 
+                    "color_label", "note", "circuit_ty", 
+                    "sys_name",  "circuit_no", "circt_nam", 
+                    "distribution_outputs_kV", "SHAPE__Len")
+
+pop_up_columns
+
+tmap_mode("view")
+
+tm_shape(circuit_data_colored) + 
+  
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_lines(
+    # color the lines by 'circuit_color'
+    col = "circuit_color",  
+    # adjust line width
+    lwd = 2,  
+    popup.vars = pop_up_columns) +  
+  
+  # Custom legend for voltage colors
+  tm_legend(
+    title = "Substation Distribution Outputs (kV)",
+    # Specify the colors to display in the legend
+    col = "voltage_label"
+    size = 1.5,  # Adjust size as needed
+    position = c("left", "top")  # Adjust position as needed
+  ) +
+  
+  tm_layout(
+    title = "SCE Distribution Circuits by Substation Voltage",
+    # Position legend inside the plot
+    legend.outside = FALSE,
+    legend.title.size = 1.2,  # Adjust title size
+    legend.text.size = 0.8     # Adjust text size
+  )
+  
+  tm_layout(title = "SCE Distribution Circuits by Substation Voltage",
+            # position legend inside the plot
+            legend.position = c("right", "bottom"),  # Adjust as needed
+            legend.outside = FALSE,
+            legend.title.size = 1.2,  # Adjust title size
+            legend.text.size = 0.8     # Adjust text size
+ ) 
+
+  
+```
+
+```{r checking_color_overlap}
+# Function to generate a color ramp from the assigned color to white
+generate_color_ramp <- function(base_color, n) {
+  colorRampPalette(c("white", base_color))(n)
+}
+
+# Set the number of colors you want in the ramp
+num_colors <- 10  # You can adjust this as needed
+
+# Generate color ramps for 7 kV and 12 kV
+ramp_7kV <- generate_color_ramp("#44AA99", num_colors)
+ramp_12kV <- generate_color_ramp("#117733", num_colors)
+
+# Create a data frame for plotting
+color_ramp_df <- data.frame(
+  Shade = c(ramp_7kV, ramp_12kV),
+  Voltage = rep(c("7 kV", "12 kV"), each = num_colors)
+)
+
+# Plot the color ramps
+
+ggplot(color_ramp_df, aes(x = factor(1:nrow(color_ramp_df)), y = 1, fill = Shade)) +
+  geom_bar(stat = "identity") +
+  scale_fill_identity() +
+  theme_minimal() +
+  theme(
+    axis.title = element_blank(),
+    axis.text.x = element_blank(),
+    axis.text.y = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "none"
+  ) +
+  labs(title = "Color Ramps for 7 kV and 12 kV Distribution") +
+  coord_flip()
+```
+
+```{r working_map}
+# Set tmap to interactive mode
+tmap_mode("view")
+
+# Create the map with the proper legend
+tm_shape(circuit_data_colored) + 
+  
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  
+  tm_lines(
+    col = "circuit_color",  # Use the existing color_label for colors
+    lwd = 2,  
+    title.col = "Circuit Color",
+    popup.vars = pop_up_columns
+  ) +  
+  
+  # Adding layout with legend properties
+  tm_layout(
+    title = "SCE Distribution Circuits by Substation Voltage (kV)",
+    legend.title.size = 1.2,  
+    legend.text.size = 0.8,     
+    legend.outside = FALSE  # Ensure the legend is inside the map
+  ) +
+  
+  # Add a scale bar with the updated parameter
+  tm_scale_bar(position = c("right", "bottom"), text.size = 0.5) +
+  
+  # Add the legend in interactive mode
+  tm_add_legend(
+    type = "fill", 
+    labels = names(voltage_colors), 
+    col = voltage_colors, 
+    title = "Substation Distribution Outputs (kV)"
+  ) +
+  
+  # Set the position of the legend for the interactive view
+  tm_view(legend.position = c("right", "top"), 
+          view.legend.position = c("right", "top"))  # Position for interactive view
+
+```
+
+
+```{r advanced_map}
+library(leaflet)
+library(leaflet.extras)
+
+tmap_mode("view")
+
+map <- tm_shape(circuit_data_colored) + 
+  tm_basemap(leaflet::providers$Esri.WorldImagery) +
+  tm_lines(
+    col = "circuit_color",  
+    lwd = 2,  
+    title.col = "Circuit Color",
+    popup.vars = pop_up_columns
+  ) +  
+  tm_layout(
+    title = "SCE Distribution Circuits by Substation Voltage (kV)",
+    legend.title.size = 1.2,  
+    legend.text.size = 0.8,     
+    legend.outside = FALSE 
+  ) +
+  tm_scale_bar(position = c("right", "bottom"), text.size = 0.5) +
+  tm_add_legend(
+    type = "fill", 
+    labels = names(voltage_colors), 
+    col = voltage_colors, 
+    title = "Substation Distribution Outputs (kV)"
+  ) +
+  tm_view(legend.position = c("right", "top"), 
+          view.legend.position = c("right", "top"))
+
+# convert the tmap object to a leaflet map
+leaflet_map <- tmap_leaflet(map)
+
+# add a search bar using leaflet.extras
+leaflet_map <- leaflet_map %>%
+  addSearchFeatures(
+    # specify the group to search within
+    targetGroups = c("sub_name","substation","circuit_id","circuit_vo", "n_distribution_circuits", "circuit_color", "note" , "sys_name", "circuit_no", "SHAPE__Len", "circt_nam", "distribution_outputs_kV"),
+    options = searchFeaturesOptions(
+     # zoom level after search
+      zoom = 10,  
+      # open popup on search result
+      openPopup = TRUE  
+    )
+  )
+
+# Print the leaflet map with the search bar
+leaflet_map
+```
+
